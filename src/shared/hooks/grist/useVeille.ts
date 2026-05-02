@@ -8,10 +8,14 @@ import {
   type SignalCategorie,
   type SignalHorizon,
   type SignalStatut,
+  type PostConcurrent,
+  type PostPlateforme,
+  type PostFormat,
 } from '@/shared/lib/types';
 
 const QK_SIGNAUX = ['signauxVeille'] as const;
 const QK_SYNTHESES = ['synthesesHebdo'] as const;
+const QK_POSTS = ['postsConcurrents'] as const;
 
 // ----------------------------------------------------------------------------
 // Signaux_veille
@@ -145,5 +149,101 @@ export function useDeleteSynthese() {
   return useMutation({
     mutationFn: (id: number) => deleteRecord('Synthese_hebdo', id),
     onSuccess: () => qc.invalidateQueries({ queryKey: QK_SYNTHESES }),
+  });
+}
+
+// ----------------------------------------------------------------------------
+// Posts_concurrents (V3, Pulse Concurrents)
+// ----------------------------------------------------------------------------
+
+export interface PostsFilters {
+  concurrent?: number;
+  plateforme?: PostPlateforme;
+  format?: PostFormat;
+  joursMax?: number;
+  topPercent?: number;
+}
+
+export function usePostsConcurrents(filters?: PostsFilters) {
+  const q = useQuery({
+    queryKey: QK_POSTS,
+    queryFn: () => fetchRows<PostConcurrent>('Posts_concurrents'),
+  });
+  const data = useMemo(() => {
+    if (!q.data) return q.data;
+    let out = q.data;
+    if (filters?.concurrent !== undefined) {
+      out = out.filter((p) => p.concurrent === filters.concurrent);
+    }
+    if (filters?.plateforme !== undefined) {
+      out = out.filter((p) => p.plateforme === filters.plateforme);
+    }
+    if (filters?.format !== undefined) {
+      out = out.filter((p) => p.format_detecte === filters.format);
+    }
+    if (filters?.joursMax !== undefined) {
+      const cutoff = Date.now() - filters.joursMax * 864e5;
+      out = out.filter((p) => {
+        if (!p.date_post) return false;
+        const t = new Date(p.date_post).getTime();
+        return !isNaN(t) && t >= cutoff;
+      });
+    }
+    if (filters?.topPercent !== undefined && out.length > 0) {
+      const sorted = [...out].sort((a, b) => (b.vues || 0) - (a.vues || 0));
+      const cutoff = Math.max(1, Math.ceil(sorted.length * (filters.topPercent / 100)));
+      out = sorted.slice(0, cutoff);
+    }
+    return out;
+  }, [
+    q.data,
+    filters?.concurrent,
+    filters?.plateforme,
+    filters?.format,
+    filters?.joursMax,
+    filters?.topPercent,
+  ]);
+  return { ...q, data };
+}
+
+type PostInput = Partial<Omit<PostConcurrent, 'id'>>;
+
+export function useCreatePostConcurrent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: PostInput) =>
+      addRecords('Posts_concurrents', [data as Record<string, unknown>]),
+    onSuccess: () => qc.invalidateQueries({ queryKey: QK_POSTS }),
+  });
+}
+
+export function useUpdatePostConcurrent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, fields }: { id: number; fields: PostInput }) =>
+      updateRecord('Posts_concurrents', id, fields as Record<string, unknown>),
+    onMutate: async ({ id, fields }) => {
+      await qc.cancelQueries({ queryKey: QK_POSTS });
+      const prev = qc.getQueryData<PostConcurrent[]>(QK_POSTS);
+      if (prev) {
+        qc.setQueryData<PostConcurrent[]>(
+          QK_POSTS,
+          prev.map((p) => (p.id === id ? { ...p, ...(fields as Partial<PostConcurrent>) } : p)),
+        );
+      }
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(QK_POSTS, ctx.prev);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: QK_POSTS }),
+  });
+}
+
+export function useDeletePostConcurrent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => deleteRecord('Posts_concurrents', id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: QK_POSTS }),
   });
 }

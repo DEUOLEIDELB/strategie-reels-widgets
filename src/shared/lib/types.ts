@@ -318,8 +318,66 @@ export function synthStatut(s: ReelStatutGrist): ReelStatutSynth {
 }
 
 // ============================================================================
-// VEILLE V2 (tables Signaux_veille + Synthese_hebdo)
+// VEILLE V2/V3 (tables Signaux_veille + Synthese_hebdo + Posts_concurrents)
 // ============================================================================
+
+export type PostPlateforme = 'instagram' | 'tiktok' | 'youtube';
+
+export type PostFormat =
+  | 'face_cam'
+  | 'b_roll'
+  | 'split_screen'
+  | 'talking_head'
+  | 'ugc'
+  | 'tutorial'
+  | 'reaction'
+  | 'compilation'
+  | 'autre';
+
+export interface PostConcurrent {
+  id: number;
+  concurrent?: number;
+  url_post: string;
+  plateforme: PostPlateforme | '';
+  date_post: number | string | null;
+  thumbnail_url: string;
+  caption: string;
+  vues: number;
+  likes: number;
+  comments: number;
+  format_detecte: PostFormat | '';
+  score_viralite: number;
+  captured_signal?: number;
+  notes: string;
+}
+
+export const POST_PLATEFORMES: PostPlateforme[] = ['instagram', 'tiktok', 'youtube'];
+
+export const POST_FORMATS: PostFormat[] = [
+  'face_cam',
+  'b_roll',
+  'split_screen',
+  'talking_head',
+  'ugc',
+  'tutorial',
+  'reaction',
+  'compilation',
+  'autre',
+];
+
+export const POST_FORMAT_LABELS: Record<PostFormat, string> = {
+  face_cam: 'Face cam',
+  b_roll: 'B-roll',
+  split_screen: 'Split screen',
+  talking_head: 'Talking head',
+  ugc: 'UGC',
+  tutorial: 'Tutoriel',
+  reaction: 'Réaction',
+  compilation: 'Compilation',
+  autre: 'Autre',
+};
+
+
 
 export type SignalSourceType =
   | 'reel'

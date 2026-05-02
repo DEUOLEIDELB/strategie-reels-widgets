@@ -1,8 +1,146 @@
-# Vue 03 : VEILLE (V2, refonte 2026-05-02)
+# Vue 03 : VEILLE (V3, refonte visual-first 2026-05-02)
 
 > **Lis d'abord `01-shared.md` et `02-design-system.md` avant ce doc.**
 
-> **Note versioning** : la V1 (read-only browser de tables Grist) est dans l'historique git. La V2 transforme la Veille en **dashboard de synthèse hebdomadaire** alimenté par capture continue. Aucun code V1 n'a été écrit, donc pas de migration.
+> **Versioning** : la V1 (read-only browser de tables) est dans l'historique git. La V2 (dashboard de synthèse + 5 radars text-heavy) a été shippée puis recallée le jour même : trop de formulaires, pas assez de visuels. La V3 ci-dessous reprend l'idée Signal/Insight/Action de la V2 mais réorganise tout par **6 blocs (features)**, avec **Pulse Concurrents** (feed visuel des Reels concurrents) comme bloc central. Layout sidebar gauche, contenu plein écran à droite.
+
+## Architecture V3 : 6 blocs (sidebar gauche)
+
+```
+VEILLE
+├─ 🔥 Pulse Concurrents     ← le coeur, 80% du temps. Feed des Reels.
+├─ 📊 Pulse Wubo            ← tes performances (placeholder V1)
+├─ 🌊 Vagues & Sons         ← tendances externes (placeholder V1)
+├─ 🏆 Hall of Fame          ← vidéos virales hors-concurrents (placeholder V1)
+├─ 🎯 Réseau                ← influenceurs Tier 1-4 (placeholder V1)
+└─ 📋 Synthèse hebdo        ← le livrable composé (placeholder V1)
+```
+
+**V1 livre uniquement Pulse Concurrents en visuel complet** + capture signal partagée (héritée V2). Les 5 autres blocs sont des `BlocPlaceholder.tsx` qui décrivent ce qui viendra (intent + features). Ils seront codés au fil des itérations une fois le pattern Pulse Concurrents validé.
+
+## Bloc 1 : Pulse Concurrents (V1 complet)
+
+### Modèle de données
+
+Nouvelle table Grist `Posts_concurrents` (créée 2026-05-02, voir `00-grist-delta.md`).
+
+| Col | Type | Notes |
+|---|---|---|
+| `concurrent` | Ref:Concurrents | obligatoire |
+| `url_post` | Text | URL Instagram/TikTok/YouTube |
+| `plateforme` | Choice | `instagram` / `tiktok` / `youtube` |
+| `date_post` | Date | |
+| `thumbnail_url` | Text | URL image. À défaut placeholder neutre. |
+| `caption` | Text | facultatif |
+| `vues` | Numeric | |
+| `likes` | Numeric | |
+| `comments` | Numeric | |
+| `format_detecte` | Choice | `face_cam` / `b_roll` / `split_screen` / `talking_head` / `ugc` / `tutorial` / `reaction` / `compilation` / `autre` |
+| `score_viralite` | Numeric | calcul : vues / médiane_compte. ≥2 = viral |
+| `captured_signal` | Ref:Signaux_veille | si capturé |
+| `notes` | Text | |
+
+### Layout
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ 🔥 Pulse Concurrents              [+ Ajouter un post]            │
+│ N posts feed, M affichés                                         │
+├──────────────────────────────────────────────────────────────────┤
+│ [Filter] [Tous concurrents▼] [Toutes plateformes▼] [30 jours▼]  │
+│         [Tous formats▼] [Tout / Viraux▼]                  Reset │
+├──────────────────────────────────────────────────────────────────┤
+│ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐           │
+│ │ 9:16   │ │ 9:16   │ │ 9:16   │ │ 9:16   │ │ 9:16   │  ← grid  │
+│ │ thumb  │ │ thumb  │ │ thumb  │ │ thumb  │ │ thumb  │  responsive│
+│ │ 220K🔥 │ │ 184K   │ │ 18K    │ │ 95K    │ │ 250K🔥 │  2 → 5 cols│
+│ │ ⓘkiwi  │ │ ⓘcirc  │ │ ⓘpand  │ │ ⓘmel   │ │ ⓘelec  │           │
+│ └────────┘ └────────┘ └────────┘ └────────┘ └────────┘           │
+│ ...                                                              │
+└──────────────────────────────────────────────────────────────────┘
+
+Click thumbnail → Drawer 480px droite avec:
+- Hero thumbnail aspect 9:16
+- Score viralité badge
+- Stats grid 3 cols (vues / likes / comments)
+- Meta grid (date / plateforme / format / engagement rate)
+- Caption si présente
+- Bouton "Capturer comme signal" (pré-rempli concurrent_lie)
+- Bouton "Créer Reel Wubo inspiré" (crée concept + setView atelier)
+- Bouton suppression (icon)
+```
+
+### Composants V1
+
+`src/views/veille/blocs/PulseConcurrents/`
+- `index.tsx` : feed + filtres + EmptyStates
+- `ConcurrentPostCard.tsx` : card visuelle 9:16 avec gradients overlay, hover capturer
+- `ConcurrentPostDrawer.tsx` : drawer détail
+- `AjouterPostModal.tsx` : modale ajout (URL + auto-detect plateforme + concurrent + thumbnail + métriques)
+
+### Décisions UX clés
+
+- **Aucune card sans visuel dominant** : thumbnail 9:16 prend ~70% de la card, texte = 30% en bas. Pas de pavé positionnement.
+- **Hover-only actions** : le bouton `+ Capturer` n'apparaît qu'au hover de la card (réduit le bruit visuel).
+- **Score viralité visualisé** : barre de progression colorée (vert/jaune/rouge) + badge `🔥 viral` si ≥2.
+- **Auto-detect plateforme** dans la modale ajout : on parse l'URL (`instagram.com` → instagram, etc.).
+- **Avatar concurrent en initiales** par défaut (2 lettres dans cercle current-soft) tant qu'on n'a pas de photo de profil scrappée.
+
+### Roadmap d'enrichissement
+
+- V1.5 : microservice oEmbed/scraping sur VPS qui auto-fill thumbnail + métriques quand on colle l'URL
+- V2 : workflow n8n hebdo qui scrappe les comptes concurrents et ajoute les nouveaux Reels en table
+- V2 : score_viralite calculé auto (médiane glissante 30 derniers posts du compte)
+- V2 : page profil concurrent avec courbe followers + grille tous ses Reels
+
+## Blocs 2-6 (placeholders V1)
+
+Chaque bloc a son fichier `index.tsx` qui rend `BlocPlaceholder` (titre + intent + liste features prévues). Le composant est dans `src/views/veille/blocs/BlocPlaceholder.tsx`. Voir le code pour la liste exacte des features par bloc.
+
+## Capture signal (réutilisée de V2)
+
+`CapturerSignalModal` reste utilisée : elle s'ouvre depuis l'overlay `+` sur une card Pulse, avec contexte pré-rempli (`titre`, `source_url`, `categorie: 'concurrent'`, `concurrent_lie`). Validation conditionnelle : `insight` requis si `horizon = now`.
+
+## Hooks shared utilisés (V3)
+
+Nouveaux (V3) : `usePostsConcurrents`, `useCreatePostConcurrent`, `useUpdatePostConcurrent`, `useDeletePostConcurrent`.
+
+Existants (V2 réutilisés) : `useConcurrents`, `useInfluenceurs`, `useTendances`, `useVideosVirales`, `useMetriquesReels`, `useReels`, `useCreateReel`, `useSignauxVeille`, `useCreateSignalVeille`, `useUpdateSynthese`, etc.
+
+Store local Veille : `src/views/veille/store.ts` (Zustand) avec `bloc: BlocVeille` et `setBloc`.
+
+## Definition of Done V1 (livré 2026-05-02)
+
+- [x] Sidebar 6 blocs avec compteur "nouveaux posts 7j" sur Pulse Concurrents
+- [x] Bloc Pulse Concurrents fonctionnel : feed grille responsive, filtres 5 axes, drawer détail, modale ajout, suppression
+- [x] Cards visuelles 9:16 avec thumbnail dominant + gradients overlay
+- [x] Auto-detect plateforme depuis URL dans modale ajout
+- [x] Score viralité visualisé (barre + badge 🔥)
+- [x] Bouton "Créer Reel inspiré" qui transforme un post concurrent en Reel concept Wubo
+- [x] 5 placeholders explicites pour les autres blocs (`BlocPlaceholder`)
+- [x] 15 posts démo injectés dans Posts_concurrents pour valider le visuel
+- [x] Capture signal V2 réutilisée et reliée aux posts concurrents
+- [x] Build passe, TypeScript strict OK
+
+## Hors-scope V1 (V2+)
+
+- 5 blocs autres (Pulse Wubo, Vagues & Sons, Hall of Fame, Réseau, Synthèse hebdo) en visuel complet
+- Microservice oEmbed pour auto-fill thumbnail/métriques
+- Scraping auto via n8n + Apify
+- Calcul auto du score_viralite
+- Page profil concurrent avec courbe followers
+- Bookmarklet (V2 future)
+
+---
+
+## Annexes : artefacts V2 conservés
+
+Les composants suivants de la V2 restent dans le code et sont réutilisés en V3 :
+- `CapturerSignalModal` (modale capture signal, héritée)
+- `CategorieBadge`, `HorizonBadge` (atomes visuels)
+- `EditableField`, `SyntheseSection` (réservés au futur Bloc 6 Synthèse)
+
+Le reste de la V2 (`SyntheseHebdo` view monolithique, `RadarTabs` et 5 radars) a été supprimé. La logique d'auto-création de la synthèse hebdo et d'archivage est différée au futur Bloc 6.
 
 ## Objectif
 

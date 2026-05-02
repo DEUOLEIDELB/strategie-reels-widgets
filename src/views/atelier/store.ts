@@ -2,11 +2,16 @@ import { create } from 'zustand';
 import type { Edge, Node } from '@xyflow/react';
 import type { AtelierNodeType } from '@/shared/lib/types';
 import { autoLayout } from './lib/autoLayout';
-import { buildEdge, buildNode, makeNodeId } from './lib/nodeFactory';
+import { buildEdge, buildNode } from './lib/nodeFactory';
 
 interface PendingAddChild {
   parentNodeId: string;
   childType: AtelierNodeType;
+}
+
+interface AddBriqueOptions {
+  position?: { x: number; y: number };
+  parentNodeId?: string;
 }
 
 interface AtelierViewStore {
@@ -19,15 +24,29 @@ interface AtelierViewStore {
     type: AtelierNodeType,
     briqueId: number,
     label: string,
-    subtitle?: string,
-    parentNodeId?: string,
-  ) => { ok: boolean; reason?: 'duplicate' };
+    subtitle: string | undefined,
+    options: AddBriqueOptions,
+  ) => string;
   removeNode: (nodeId: string) => void;
   relayout: () => void;
 
   pendingAddChild: PendingAddChild | null;
   requestAddChild: (parentNodeId: string, childType: AtelierNodeType) => void;
   clearPendingAddChild: () => void;
+
+  openedBriqueDrawer: { type: AtelierNodeType; briqueId: number } | null;
+  openBriqueDrawer: (type: AtelierNodeType, briqueId: number) => void;
+  closeBriqueDrawer: () => void;
+}
+
+const HORIZONTAL_OFFSET = 280;
+const VERTICAL_SPREAD = 140;
+
+function positionForChild(parent: Node, existingChildren: Node[]): { x: number; y: number } {
+  // On empile vers le bas si plusieurs enfants déjà posés sur le même parent.
+  const baseX = parent.position.x + HORIZONTAL_OFFSET;
+  const baseY = parent.position.y + existingChildren.length * VERTICAL_SPREAD;
+  return { x: baseX, y: baseY };
 }
 
 export const useAtelierView = create<AtelierViewStore>((set, get) => ({
@@ -40,21 +59,31 @@ export const useAtelierView = create<AtelierViewStore>((set, get) => ({
 
   setEdges: (updater) => set((s) => ({ edges: updater(s.edges) })),
 
-  addBrique: (type, briqueId, label, subtitle, parentNodeId) => {
-    const newId = makeNodeId(type, briqueId);
+  addBrique: (type, briqueId, label, subtitle, options) => {
     const { nodes, edges } = get();
-    if (nodes.some((n) => n.id === newId)) {
-      return { ok: false, reason: 'duplicate' };
+    let position = options.position;
+    if (!position && options.parentNodeId) {
+      const parent = nodes.find((n) => n.id === options.parentNodeId);
+      if (parent) {
+        const siblings = edges
+          .filter((e) => e.source === options.parentNodeId)
+          .map((e) => nodes.find((n) => n.id === e.target))
+          .filter((n): n is Node => Boolean(n));
+        position = positionForChild(parent, siblings);
+      }
     }
-    const node = buildNode(type, briqueId, label, subtitle);
-    const nextNodes = [...nodes, node];
-    const nextEdges = parentNodeId
-      ? edges.some((e) => e.id === buildEdge(parentNodeId, newId).id)
-        ? edges
-        : [...edges, buildEdge(parentNodeId, newId)]
+    if (!position) {
+      // Fallback : empile à droite des nodes existants pour ne pas spawner sur les autres.
+      const maxX = nodes.reduce((m, n) => Math.max(m, n.position.x), -Infinity);
+      const baseX = Number.isFinite(maxX) ? maxX + HORIZONTAL_OFFSET : 0;
+      position = { x: baseX, y: 0 };
+    }
+    const node = buildNode(type, briqueId, label, subtitle, position);
+    const nextEdges = options.parentNodeId
+      ? [...edges, buildEdge(options.parentNodeId, node.id)]
       : edges;
-    set({ nodes: autoLayout(nextNodes, nextEdges), edges: nextEdges });
-    return { ok: true };
+    set({ nodes: [...nodes, node], edges: nextEdges });
+    return node.id;
   },
 
   removeNode: (nodeId) => {
@@ -71,4 +100,8 @@ export const useAtelierView = create<AtelierViewStore>((set, get) => ({
   pendingAddChild: null,
   requestAddChild: (parentNodeId, childType) => set({ pendingAddChild: { parentNodeId, childType } }),
   clearPendingAddChild: () => set({ pendingAddChild: null }),
+
+  openedBriqueDrawer: null,
+  openBriqueDrawer: (type, briqueId) => set({ openedBriqueDrawer: { type, briqueId } }),
+  closeBriqueDrawer: () => set({ openedBriqueDrawer: null }),
 }));

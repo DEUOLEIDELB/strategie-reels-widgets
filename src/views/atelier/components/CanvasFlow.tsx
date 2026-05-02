@@ -1,5 +1,5 @@
 import '@xyflow/react/dist/style.css';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -65,10 +65,14 @@ function CanvasInner({ atelier }: Props) {
   const removeNode = useAtelierView((s) => s.removeNode);
   const requestAddChild = useAtelierView((s) => s.requestAddChild);
   const addBrique = useAtelierView((s) => s.addBrique);
+  const openBriqueDrawer = useAtelierView((s) => s.openBriqueDrawer);
 
   const rf = useReactFlow();
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Charge le canvas depuis l'atelier courant à chaque changement d'atelier
+  // Charge le canvas au changement d'atelier UNIQUEMENT (pas à chaque tick de canvas_state).
+  // Le canvas_state est sauvegardé en debounced ; on évite le rebound qui écraserait des modifs locales.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const state = parseCanvasState(atelier.canvas_state);
     const initialNodes: Node[] = state.nodes.map((n) => ({
@@ -84,8 +88,10 @@ function CanvasInner({ atelier }: Props) {
       type: 'smoothstep',
     }));
     setGraph(initialNodes, initialEdges);
-    setTimeout(() => rf.fitView({ padding: 0.2, duration: 250 }), 60);
-  }, [atelier.id, atelier.canvas_state, rf, setGraph]);
+    // fitView une seule fois après le chargement de cet atelier
+    const t = window.setTimeout(() => rf.fitView({ padding: 0.2, duration: 250 }), 60);
+    return () => window.clearTimeout(t);
+  }, [atelier.id]);
 
   const { data: avatars } = useAvatars();
   const { data: angles } = useAngles();
@@ -181,21 +187,27 @@ function CanvasInner({ atelier }: Props) {
       event.preventDefault();
       const payload = readDragPayload(event);
       if (!payload) return;
-      const result = addBrique(payload.type, payload.briqueId, payload.label, payload.subtitle);
-      if (!result.ok && result.reason === 'duplicate') {
-        toast('Cette brique est déjà sur le canvas.', { icon: 'ℹ️' });
-      } else {
-        setTimeout(() => rf.fitView({ padding: 0.2, duration: 250 }), 60);
-      }
+      const position = rf.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      addBrique(payload.type, payload.briqueId, payload.label, payload.subtitle, { position });
     },
     [addBrique, rf],
+  );
+
+  const onNodeDoubleClick = useCallback(
+    (_event: React.MouseEvent, node: Node) => {
+      if (!node.type) return;
+      const briqueId = Number((node.data as { briqueId?: number })?.briqueId ?? 0);
+      if (!briqueId) return;
+      openBriqueDrawer(node.type as AtelierNodeType, briqueId);
+    },
+    [openBriqueDrawer],
   );
 
   useDebouncedCanvasSave({ atelierId: atelier.id, nodes, edges, enabled: true });
 
   return (
     <NodeCallbacksProvider value={callbacks}>
-      <div className="w-full h-full relative" onDragOver={onDragOver} onDrop={onDrop}>
+      <div ref={wrapperRef} className="w-full h-full relative" onDragOver={onDragOver} onDrop={onDrop}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -203,8 +215,7 @@ function CanvasInner({ atelier }: Props) {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          fitView
-          fitViewOptions={{ padding: 0.2 }}
+          onNodeDoubleClick={onNodeDoubleClick}
           proOptions={{ hideAttribution: true }}
           defaultEdgeOptions={{ type: 'smoothstep' }}
         >
@@ -218,7 +229,7 @@ function CanvasInner({ atelier }: Props) {
               <EmptyState
                 icon={<Sparkles size={32} />}
                 title="Canvas vide"
-                description="Glisse un avatar depuis la sidebar à droite pour démarrer la cascade."
+                description="Glisse un avatar depuis la sidebar à droite pour démarrer la cascade. Tu peux poser la même brique plusieurs fois."
               />
             </div>
           </div>

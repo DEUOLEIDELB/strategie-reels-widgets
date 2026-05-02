@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import toast from 'react-hot-toast';
 import { Search } from 'lucide-react';
-import { Modal, ModalBody, Input, Skeleton } from '@/shared/components';
+import { Modal, ModalBody, Input, Skeleton, Badge } from '@/shared/components';
 import { useAvatars, useAngles, usePainPoints, useReels } from '@/shared/hooks/grist';
 import type { AtelierNodeType } from '@/shared/lib/types';
 import { useAtelierView } from '../store';
 import { nodeStyleOf } from '../lib/nodeStyle';
+import { countInstances } from '../lib/nodeFactory';
 import { cn } from '@/shared/lib/utils';
 
 const LABELS: Record<AtelierNodeType, string> = {
@@ -77,7 +77,15 @@ export function BriquePicker() {
 
   if (!pending) return null;
 
-  return <BriquePickerInner pending={pending} onClose={clearPending} addBrique={addBrique} search={search} setSearch={setSearch} />;
+  return (
+    <BriquePickerInner
+      pending={pending}
+      onClose={clearPending}
+      addBrique={addBrique}
+      search={search}
+      setSearch={setSearch}
+    />
+  );
 }
 
 interface InnerProps {
@@ -92,6 +100,7 @@ function BriquePickerInner({ pending, onClose, addBrique, search, setSearch }: I
   const { childType, parentNodeId } = pending;
   const { items, loading } = usePickerItems(childType);
   const style = nodeStyleOf(childType);
+  const nodes = useAtelierView((s) => s.nodes);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -102,11 +111,7 @@ function BriquePickerInner({ pending, onClose, addBrique, search, setSearch }: I
   }, [items, search]);
 
   const handlePick = (item: PickerItem) => {
-    const result = addBrique(childType, item.id, item.label, item.subtitle, parentNodeId);
-    if (!result.ok && result.reason === 'duplicate') {
-      toast('Cette brique est déjà sur le canvas. Connecte-la manuellement si besoin.', { icon: 'ℹ️' });
-      return;
-    }
+    addBrique(childType, item.id, item.label, item.subtitle, { parentNodeId });
     onClose();
   };
 
@@ -140,35 +145,45 @@ function BriquePickerInner({ pending, onClose, addBrique, search, setSearch }: I
               </div>
             ) : (
               <div className="space-y-1.5">
-                {filtered.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handlePick(item)}
-                    className={cn(
-                      'w-full text-left rounded-md border border-border bg-surface px-2.5 py-2',
-                      'hover:bg-surface-alt hover:border-border-strong transition-colors',
-                    )}
-                  >
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span
-                        className={cn(
-                          'inline-flex items-center px-1.5 h-[16px] rounded-sm text-[9px] font-semibold uppercase',
-                          style.badgeBg,
-                          style.badgeText,
+                {filtered.map((item) => {
+                  const count = countInstances(nodes, childType, item.id);
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handlePick(item)}
+                      className={cn(
+                        'w-full text-left rounded-md border border-border bg-surface px-2.5 py-2',
+                        'hover:bg-surface-alt hover:border-border-strong transition-colors',
+                      )}
+                    >
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span
+                          className={cn(
+                            'inline-flex items-center px-1.5 h-[16px] rounded-sm text-[9px] font-semibold uppercase',
+                            style.badgeBg,
+                            style.badgeText,
+                          )}
+                        >
+                          {style.badgeLabel}
+                        </span>
+                        <span className="text-[13px] font-medium text-text leading-snug line-clamp-1 flex-1">
+                          {item.label}
+                        </span>
+                        {count > 0 && (
+                          <Badge variant="default" size="xs">
+                            ×{count} posé
+                          </Badge>
                         )}
-                      >
-                        {style.badgeLabel}
-                      </span>
-                      <span className="text-[13px] font-medium text-text leading-snug line-clamp-1">{item.label}</span>
-                    </div>
-                    {item.subtitle && (
-                      <div className="text-[11px] text-text-faint leading-snug line-clamp-1 pl-1">
-                        {item.subtitle}
                       </div>
-                    )}
-                  </button>
-                ))}
+                      {item.subtitle && (
+                        <div className="text-[11px] text-text-faint leading-snug line-clamp-1 pl-1">
+                          {item.subtitle}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>

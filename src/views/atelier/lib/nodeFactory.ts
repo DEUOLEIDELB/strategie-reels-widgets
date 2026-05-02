@@ -10,8 +10,16 @@ export interface BriqueNodeData extends Record<string, unknown> {
 
 export type BriqueNode = Node<BriqueNodeData>;
 
+// Le nodeId est désormais une instance unique. La même brique peut être posée plusieurs fois
+// sur le canvas, chaque instance a son propre nodeId. La traçabilité Grist se fait via data.briqueId.
+let counter = 0;
+function shortId(): string {
+  counter = (counter + 1) % 1_000_000;
+  return Date.now().toString(36).slice(-4) + counter.toString(36);
+}
+
 export function makeNodeId(type: AtelierNodeType, briqueId: number): string {
-  return `${type}-${briqueId}`;
+  return `${type}-${briqueId}-${shortId()}`;
 }
 
 export function buildNode(
@@ -53,4 +61,17 @@ export function nextLevelOf(type: AtelierNodeType): AtelierNodeType | null {
 
 export function canConnect(sourceType: AtelierNodeType, targetType: AtelierNodeType): boolean {
   return HIERARCHY[sourceType] === targetType;
+}
+
+// Compte les instances posées sur le canvas pour un (type, briqueId) donné.
+export function countInstances(
+  nodes: Node[],
+  type: AtelierNodeType,
+  briqueId: number,
+): number {
+  return nodes.filter((n) => {
+    if (n.type !== type) return false;
+    const data = n.data as { briqueId?: number } | undefined;
+    return data?.briqueId === briqueId;
+  }).length;
 }

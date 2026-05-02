@@ -76,3 +76,56 @@ Existant : `concept | scripté | filmé | monté | posté | analysé`. En V1 fro
 - `posté` (posté + analysé)
 
 Le mapping se fait au niveau du widget. La col Grist garde ses 6 valeurs.
+
+## Delta V2, Veille (appliqué 2026-05-02)
+
+### Nouvelles tables créées
+
+#### `Signaux_veille`
+
+| Col | Type | Notes |
+|---|---|---|
+| `date_capture` | Date | |
+| `semaine_iso` | Text | format `YYYY-Www`, ex `2026-W19` |
+| `source_type` | Choice | `reel` / `article` / `tweet` / `dashboard_perf` / `manuel` / `email` / `bookmarklet` |
+| `source_url` | Text | |
+| `categorie` | Choice | `performance` / `concurrent` / `trend_son` / `trend_format` / `actu` / `audience` / `algo` |
+| `titre` | Text | |
+| `signal` | Text | |
+| `insight` | Text | |
+| `action_proposee` | Text | |
+| `horizon` | Choice | `now` / `next` / `later` |
+| `statut` | Choice | `capturé` / `intégré_synthèse` / `archivé` / `ignoré` |
+| `reel_genere` | Ref:Reels | |
+| `concurrent_lie` | Ref:Concurrents | |
+| `influenceur_lie` | Ref:Influenceurs | |
+| `notes` | Text | |
+
+#### `Synthese_hebdo`
+
+| Col | Type | Notes |
+|---|---|---|
+| `semaine_iso` | Text | unique en pratique |
+| `date_creation` | Date | |
+| `date_archivage` | Date | nullable |
+| `performance_top` | Text | |
+| `performance_flop` | Text | |
+| `performance_metrique_surveiller` | Text | |
+| `concurrents_obs` | Text | |
+| `trends_now` | Text | |
+| `signaux_faibles` | Text | |
+| `actions_1` | Text | |
+| `actions_2` | Text | |
+| `actions_3` | Text | |
+| `notes_libres` | Text | |
+| `statut` | Choice | `en_cours` / `archivée` |
+
+### Conséquences code
+
+`src/shared/lib/types.ts` ajoute `SignalVeille`, `SyntheseHebdo`, types unions, helper `currentSemaineIso`.
+
+`src/shared/hooks/grist/useVeille.ts` ajoute `useSignauxVeille`, `useCreateSignalVeille`, `useUpdateSignalVeille`, `useDeleteSignalVeille`, `useSynthesesHebdo`, `useSyntheseEnCours`, `useCreateSynthese`, `useUpdateSynthese`, `useDeleteSynthese`.
+
+### Règle invariant
+
+Il existe **0 ou 1** synthèse `en_cours` par semaine ISO. Les autres sont `archivée`. Le widget Veille auto-crée la synthèse de la semaine ISO courante au premier mount si elle n'existe pas.

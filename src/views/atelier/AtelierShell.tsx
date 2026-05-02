@@ -7,13 +7,17 @@ import { AtelierHeader } from './components/AtelierHeader';
 import { CanvasFlow } from './components/CanvasFlow';
 import { BibliothequeSidebar } from './components/BibliothequeSidebar';
 import { BriquePicker } from './components/BriquePicker';
+import { BriqueDetailDrawer } from './components/BriqueDetailDrawer';
+import { LiveSyncIndicator } from './components/LiveSyncIndicator';
 import { CreateAtelierModal } from './components/modals/CreateAtelierModal';
+import { useLiveSync } from './hooks/useLiveSync';
 
 export function AtelierShell() {
   const ateliers = useAteliers();
   const currentAtelierId = useAppStore((s) => s.currentAtelierId);
   const setCurrentAtelier = useAppStore((s) => s.setCurrentAtelier);
   const [createOpen, setCreateOpen] = useState(false);
+  const { lastSyncedAt } = useLiveSync();
 
   const list = ateliers.data ?? [];
 
@@ -96,10 +100,14 @@ export function AtelierShell() {
               />
             </div>
           )}
+          <div className="absolute top-2 right-2 z-10 px-2 py-1 rounded-sm bg-surface/90 border border-border shadow-sm backdrop-blur-sm">
+            <LiveSyncIndicator lastSyncedAt={lastSyncedAt} />
+          </div>
         </main>
         <BibliothequeSidebar />
       </div>
       <BriquePicker />
+      <BriqueDetailDrawer />
     </div>
   );
 }

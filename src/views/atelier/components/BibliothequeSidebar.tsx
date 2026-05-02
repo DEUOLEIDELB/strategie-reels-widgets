@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Search, Users, Compass, AlertTriangle, Film } from 'lucide-react';
-import { Input, Tabs, TabsList, TabsTrigger, TabsContent, Skeleton } from '@/shared/components';
+import { Input, Tabs, TabsList, TabsTrigger, TabsContent, Skeleton, Badge } from '@/shared/components';
 import { useAvatars, useAngles, usePainPoints, useReels } from '@/shared/hooks/grist';
 import { cn } from '@/shared/lib/utils';
 import type { AtelierNodeType } from '@/shared/lib/types';
+import { countInstances } from '../lib/nodeFactory';
+import { useAtelierView } from '../store';
 
 interface BriqueItem {
   id: number;
@@ -14,13 +16,14 @@ interface BriqueItem {
 interface BriqueRowProps {
   type: AtelierNodeType;
   item: BriqueItem;
+  count: number;
 }
 
-function BriqueRow({ type, item }: BriqueRowProps) {
+function BriqueRow({ type, item, count }: BriqueRowProps) {
   const onDragStart = (event: React.DragEvent<HTMLDivElement>) => {
     event.dataTransfer.setData(
       'application/atelier-brique',
-      JSON.stringify({ type, briqueId: item.id, label: item.label }),
+      JSON.stringify({ type, briqueId: item.id, label: item.label, subtitle: item.subtitle }),
     );
     event.dataTransfer.effectAllowed = 'copy';
   };
@@ -33,12 +36,21 @@ function BriqueRow({ type, item }: BriqueRowProps) {
         'group cursor-grab active:cursor-grabbing rounded-md border border-border bg-surface px-2.5 py-2',
         'hover:border-border-strong hover:bg-surface-alt transition-colors',
       )}
-      title="Glisse vers le canvas"
+      title={count > 0 ? `Posé ${count} fois — glisse pour ajouter une instance de plus` : 'Glisse vers le canvas'}
     >
-      <div className="text-[13px] font-medium text-text leading-snug line-clamp-1">{item.label}</div>
-      {item.subtitle && (
-        <div className="text-[11px] text-text-faint leading-snug line-clamp-1 mt-0.5">{item.subtitle}</div>
-      )}
+      <div className="flex items-start gap-1.5">
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] font-medium text-text leading-snug line-clamp-1">{item.label}</div>
+          {item.subtitle && (
+            <div className="text-[11px] text-text-faint leading-snug line-clamp-1 mt-0.5">{item.subtitle}</div>
+          )}
+        </div>
+        {count > 0 && (
+          <Badge variant="current" size="xs" className="shrink-0">
+            ×{count}
+          </Badge>
+        )}
+      </div>
     </div>
   );
 }
@@ -51,6 +63,8 @@ interface SectionProps {
 }
 
 function BriqueSection({ type, items, loading, search }: SectionProps) {
+  const nodes = useAtelierView((s) => s.nodes);
+
   const filtered = useMemo(() => {
     if (!items) return [];
     const q = search.trim().toLowerCase();
@@ -82,7 +96,7 @@ function BriqueSection({ type, items, loading, search }: SectionProps) {
   return (
     <div className="space-y-1.5">
       {filtered.map((item) => (
-        <BriqueRow key={item.id} type={type} item={item} />
+        <BriqueRow key={item.id} type={type} item={item} count={countInstances(nodes, type, item.id)} />
       ))}
     </div>
   );

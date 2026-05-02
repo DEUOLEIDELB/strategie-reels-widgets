@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Sparkles, Library, Telescope, KeyRound, Beaker } from 'lucide-react';
 import { useAppStore, type View } from '@/shared/store';
 import { Button } from '@/shared/components';
-import { hasApiKey, resetApiKey, initGrist, inGristIframe } from '@/shared/lib/grist-api';
+import { getApiKey, hasApiKey, resetApiKey, initGrist, inGristIframe } from '@/shared/lib/grist-api';
 import { cn } from '@/shared/lib/utils';
 import { Atelier } from '@/views/atelier';
 import { Bibliotheque } from '@/views/bibliotheque';
@@ -32,6 +32,14 @@ export function Shell() {
     resetApiKey();
     setKeyOk(false);
     window.location.reload();
+  }
+
+  function handleEnterKey() {
+    const key = getApiKey();
+    if (key) {
+      setKeyOk(true);
+      window.location.reload();
+    }
   }
 
   if (showPlayground) {
@@ -92,7 +100,14 @@ export function Shell() {
               Clé OK
             </button>
           ) : (
-            <span className="text-[11px] text-danger">Clé manquante</span>
+            <button
+              onClick={handleEnterKey}
+              title="Saisir la clé API Grist"
+              className="inline-flex items-center gap-1 px-2 h-7 text-[11px] rounded-sm bg-danger text-on-danger hover:brightness-95"
+            >
+              <KeyRound size={12} />
+              Saisir la clé
+            </button>
           )}
         </div>
       </header>

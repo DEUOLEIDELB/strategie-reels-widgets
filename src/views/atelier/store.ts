@@ -37,6 +37,11 @@ interface AtelierViewStore {
   openedBriqueDrawer: { type: AtelierNodeType; briqueId: number } | null;
   openBriqueDrawer: (type: AtelierNodeType, briqueId: number) => void;
   closeBriqueDrawer: () => void;
+
+  // Snapshot du dernier canvas_state pushé vers Grist (ou chargé depuis Grist).
+  // Sert à détecter "modif locale en cours" vs "modif distante d'un autre user".
+  lastSavedSnapshot: string | null;
+  setLastSavedSnapshot: (s: string | null) => void;
 }
 
 const HORIZONTAL_OFFSET = 280;
@@ -104,4 +109,7 @@ export const useAtelierView = create<AtelierViewStore>((set, get) => ({
   openedBriqueDrawer: null,
   openBriqueDrawer: (type, briqueId) => set({ openedBriqueDrawer: { type, briqueId } }),
   closeBriqueDrawer: () => set({ openedBriqueDrawer: null }),
+
+  lastSavedSnapshot: null,
+  setLastSavedSnapshot: (s) => set({ lastSavedSnapshot: s }),
 }));

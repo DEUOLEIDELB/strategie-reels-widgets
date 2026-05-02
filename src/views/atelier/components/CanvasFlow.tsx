@@ -23,8 +23,11 @@ import { Sparkles } from 'lucide-react';
 import { EmptyState } from '@/shared/components';
 import {
   parseCanvasState,
+  serializeCanvasState,
   type Atelier,
   type AtelierNodeType,
+  type AtelierEdge,
+  type AtelierNode,
 } from '@/shared/lib/types';
 import { useAvatars, useAngles, usePainPoints, useReels } from '@/shared/hooks/grist';
 import { canConnect, nextLevelOf } from '../lib/nodeFactory';
@@ -32,6 +35,20 @@ import { NODE_TYPES } from './nodes/nodeTypes';
 import { NodeCallbacksProvider } from './nodes/NodeCallbacksContext';
 import { useDebouncedCanvasSave } from '../hooks/useDebouncedCanvasSave';
 import { useAtelierView } from '../store';
+
+function snapshotOfRf(nodes: Node[], edges: Edge[]): string {
+  const n: AtelierNode[] = nodes.map((nd) => ({
+    id: nd.id,
+    type: (nd.type as AtelierNodeType) ?? 'avatar',
+    position: { x: Math.round(nd.position.x), y: Math.round(nd.position.y) },
+    data: {
+      briqueId: Number((nd.data as { briqueId?: number })?.briqueId ?? 0),
+      label: String((nd.data as { label?: string })?.label ?? ''),
+    },
+  }));
+  const e: AtelierEdge[] = edges.map((ed) => ({ id: ed.id, source: ed.source, target: ed.target }));
+  return serializeCanvasState({ nodes: n, edges: e });
+}
 
 interface DragPayload {
   type: AtelierNodeType;
@@ -66,15 +83,32 @@ function CanvasInner({ atelier }: Props) {
   const requestAddChild = useAtelierView((s) => s.requestAddChild);
   const addBrique = useAtelierView((s) => s.addBrique);
   const openBriqueDrawer = useAtelierView((s) => s.openBriqueDrawer);
+  const lastSavedSnapshot = useAtelierView((s) => s.lastSavedSnapshot);
+  const setLastSavedSnapshot = useAtelierView((s) => s.setLastSavedSnapshot);
 
   const rf = useReactFlow();
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const idRef = useRef<number>(-1);
 
-  // Charge le canvas au changement d'atelier UNIQUEMENT (pas à chaque tick de canvas_state).
-  // Le canvas_state est sauvegardé en debounced ; on évite le rebound qui écraserait des modifs locales.
+  // Hydrate le canvas depuis l'atelier courant. Au changement d'atelier.id : reload + fitView.
+  // Au changement de canvas_state (= polling distant) : reload silencieux SI on n'a pas de modif
+  // locale en attente (last-write-wins doux : tant que tu édites, on n'écrase pas).
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    const state = parseCanvasState(atelier.canvas_state);
+    const remote = atelier.canvas_state ?? '';
+    const idChanged = idRef.current !== atelier.id;
+
+    if (!idChanged) {
+      // Modif distante éventuelle : on ne reload que si :
+      //  - le state distant n'est pas notre propre save (lastSavedSnapshot)
+      //  - notre canvas local est en sync avec lastSavedSnapshot (= pas de modif locale en cours)
+      if (remote === lastSavedSnapshot) return;
+      const localSnapshot = snapshotOfRf(nodes, edges);
+      const localDirty = lastSavedSnapshot !== null && localSnapshot !== lastSavedSnapshot;
+      if (localDirty) return; // on garde la version locale, save écrasera tout à l'heure
+    }
+
+    const state = parseCanvasState(remote);
     const initialNodes: Node[] = state.nodes.map((n) => ({
       id: n.id,
       type: n.type,
@@ -88,10 +122,14 @@ function CanvasInner({ atelier }: Props) {
       type: 'smoothstep',
     }));
     setGraph(initialNodes, initialEdges);
-    // fitView une seule fois après le chargement de cet atelier
-    const t = window.setTimeout(() => rf.fitView({ padding: 0.2, duration: 250 }), 60);
-    return () => window.clearTimeout(t);
-  }, [atelier.id]);
+    setLastSavedSnapshot(remote || null);
+
+    if (idChanged) {
+      idRef.current = atelier.id;
+      const t = window.setTimeout(() => rf.fitView({ padding: 0.2, duration: 250 }), 60);
+      return () => window.clearTimeout(t);
+    }
+  }, [atelier.id, atelier.canvas_state]);
 
   const { data: avatars } = useAvatars();
   const { data: angles } = useAngles();

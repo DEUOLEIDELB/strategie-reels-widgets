@@ -8,8 +8,9 @@ import {
   type AtelierNode,
   type AtelierNodeType,
 } from '@/shared/lib/types';
+import { useAtelierView } from '../store';
 
-const DEBOUNCE_MS = 1200;
+const DEBOUNCE_MS = 1000;
 
 function rfToCanvas(nodes: Node[], edges: Edge[]): AtelierCanvasState {
   const cleanNodes: AtelierNode[] = nodes.map((n) => ({
@@ -38,18 +39,20 @@ interface Options {
 
 export function useDebouncedCanvasSave({ atelierId, nodes, edges, enabled }: Options) {
   const update = useUpdateAtelier();
+  const setLastSavedSnapshot = useAtelierView((s) => s.setLastSavedSnapshot);
   const timer = useRef<number | null>(null);
-  const lastPayload = useRef<string>('');
+  const lastFlushed = useRef<string>('');
 
   useEffect(() => {
     if (!enabled || atelierId === null) return;
     const state = rfToCanvas(nodes, edges);
     const payload = serializeCanvasState(state);
-    if (payload === lastPayload.current) return;
+    if (payload === lastFlushed.current) return;
 
     if (timer.current !== null) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
-      lastPayload.current = payload;
+      lastFlushed.current = payload;
+      setLastSavedSnapshot(payload);
       update.mutate({ id: atelierId, fields: { canvas_state: payload } });
     }, DEBOUNCE_MS);
 
@@ -60,8 +63,8 @@ export function useDebouncedCanvasSave({ atelierId, nodes, edges, enabled }: Opt
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [atelierId, nodes, edges, enabled]);
 
-  // Reset baseline quand on change d'atelier (sinon on flush l'ancien state dans le nouveau)
+  // Reset baseline quand on change d'atelier
   useEffect(() => {
-    lastPayload.current = '';
+    lastFlushed.current = '';
   }, [atelierId]);
 }

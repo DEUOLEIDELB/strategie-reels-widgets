@@ -119,15 +119,20 @@ function BriquePickerInner({ pending, onClose, addBrique, search, setSearch }: I
     <Modal open onOpenChange={(o) => !o && onClose()} title={`Choisir un ${LABELS[childType]}`}>
       <ModalBody>
         <div className="space-y-3">
-          <div className="relative">
-            <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted" />
-            <Input
-              autoFocus
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={`Filtrer les ${LABELS[childType]}s...`}
-              className="pl-7 h-8 text-xs"
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted" />
+              <Input
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={`Filtrer les ${LABELS[childType]}s...`}
+                className="pl-7 h-8 text-xs"
+              />
+            </div>
+            <span className="text-[10px] text-text-faint whitespace-nowrap">
+              {filtered.length} / {items.length} {LABELS[childType]}{items.length > 1 ? 's' : ''}
+            </span>
           </div>
 
           <div className="max-h-[360px] overflow-y-auto scrollbar-thin -mx-1 px-1">

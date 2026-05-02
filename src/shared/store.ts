@@ -9,9 +9,34 @@ export type Injection =
   | { type: 'script'; data: Script }
   | { type: 'ressource'; data: Ressource };
 
+const ATELIER_STORAGE_KEY = 'wubo_current_atelier_id';
+
+function readPersistedAtelierId(): number | null {
+  try {
+    const raw = localStorage.getItem(ATELIER_STORAGE_KEY);
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePersistedAtelierId(id: number | null): void {
+  try {
+    if (id === null) localStorage.removeItem(ATELIER_STORAGE_KEY);
+    else localStorage.setItem(ATELIER_STORAGE_KEY, String(id));
+  } catch {
+    // ignore (quota / privacy mode)
+  }
+}
+
 interface AppStore {
   view: View;
   setView: (v: View) => void;
+
+  currentAtelierId: number | null;
+  setCurrentAtelier: (id: number | null) => void;
 
   currentAvatarId: number | null;
   currentAngleId: number | null;
@@ -31,6 +56,12 @@ interface AppStore {
 export const useAppStore = create<AppStore>((set, get) => ({
   view: 'atelier',
   setView: (v) => set({ view: v }),
+
+  currentAtelierId: readPersistedAtelierId(),
+  setCurrentAtelier: (id) => {
+    writePersistedAtelierId(id);
+    set({ currentAtelierId: id });
+  },
 
   currentAvatarId: null,
   currentAngleId: null,

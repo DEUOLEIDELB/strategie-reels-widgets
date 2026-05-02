@@ -248,6 +248,58 @@ export interface Sujet {
   statut: string;
 }
 
+export type AtelierNodeType = 'avatar' | 'angle' | 'pain' | 'reel';
+
+export interface AtelierNode {
+  id: string;
+  type: AtelierNodeType;
+  position: { x: number; y: number };
+  data: {
+    briqueId: number;
+    label: string;
+  };
+}
+
+export interface AtelierEdge {
+  id: string;
+  source: string;
+  target: string;
+}
+
+export interface AtelierCanvasState {
+  nodes: AtelierNode[];
+  edges: AtelierEdge[];
+}
+
+export interface Atelier {
+  id: number;
+  nom: string;
+  description: string;
+  canvas_state: string;
+  parent_atelier?: number;
+  created_at: number | string;
+  updated_at: number | string;
+}
+
+export const EMPTY_CANVAS_STATE: AtelierCanvasState = { nodes: [], edges: [] };
+
+export function parseCanvasState(raw: string | null | undefined): AtelierCanvasState {
+  if (!raw) return EMPTY_CANVAS_STATE;
+  try {
+    const parsed = JSON.parse(raw) as Partial<AtelierCanvasState>;
+    return {
+      nodes: Array.isArray(parsed.nodes) ? parsed.nodes : [],
+      edges: Array.isArray(parsed.edges) ? parsed.edges : [],
+    };
+  } catch {
+    return EMPTY_CANVAS_STATE;
+  }
+}
+
+export function serializeCanvasState(state: AtelierCanvasState): string {
+  return JSON.stringify(state);
+}
+
 export const REEL_STATUTS_GRIST: ReelStatutGrist[] = [
   'concept',
   'scripté',
@@ -263,4 +315,117 @@ export function synthStatut(s: ReelStatutGrist): ReelStatutSynth {
   if (s === 'concept') return 'idée';
   if (s === 'scripté' || s === 'filmé' || s === 'monté') return 'prêt';
   return 'posté';
+}
+
+// ============================================================================
+// VEILLE V2 (tables Signaux_veille + Synthese_hebdo)
+// ============================================================================
+
+export type SignalSourceType =
+  | 'reel'
+  | 'article'
+  | 'tweet'
+  | 'dashboard_perf'
+  | 'manuel'
+  | 'email'
+  | 'bookmarklet';
+
+export type SignalCategorie =
+  | 'performance'
+  | 'concurrent'
+  | 'trend_son'
+  | 'trend_format'
+  | 'actu'
+  | 'audience'
+  | 'algo';
+
+export type SignalHorizon = 'now' | 'next' | 'later';
+
+export type SignalStatut = 'capturé' | 'intégré_synthèse' | 'archivé' | 'ignoré';
+
+export interface SignalVeille {
+  id: number;
+  date_capture: number | string;
+  semaine_iso: string;
+  source_type: SignalSourceType | '';
+  source_url: string;
+  categorie: SignalCategorie | '';
+  titre: string;
+  signal: string;
+  insight: string;
+  action_proposee: string;
+  horizon: SignalHorizon | '';
+  statut: SignalStatut | '';
+  reel_genere?: number;
+  concurrent_lie?: number;
+  influenceur_lie?: number;
+  notes: string;
+}
+
+export type SyntheseStatut = 'en_cours' | 'archivée';
+
+export interface SyntheseHebdo {
+  id: number;
+  semaine_iso: string;
+  date_creation: number | string;
+  date_archivage: number | string | null;
+  performance_top: string;
+  performance_flop: string;
+  performance_metrique_surveiller: string;
+  concurrents_obs: string;
+  trends_now: string;
+  signaux_faibles: string;
+  actions_1: string;
+  actions_2: string;
+  actions_3: string;
+  notes_libres: string;
+  statut: SyntheseStatut;
+}
+
+export const SIGNAL_CATEGORIES: SignalCategorie[] = [
+  'performance',
+  'concurrent',
+  'trend_son',
+  'trend_format',
+  'actu',
+  'audience',
+  'algo',
+];
+
+export const SIGNAL_HORIZONS: SignalHorizon[] = ['now', 'next', 'later'];
+
+export const SIGNAL_SOURCE_TYPES: SignalSourceType[] = [
+  'reel',
+  'article',
+  'tweet',
+  'dashboard_perf',
+  'manuel',
+  'email',
+  'bookmarklet',
+];
+
+export const SIGNAL_CATEGORIE_LABELS: Record<SignalCategorie, string> = {
+  performance: 'Performance',
+  concurrent: 'Concurrent',
+  trend_son: 'Son trending',
+  trend_format: 'Format trending',
+  actu: 'Actu',
+  audience: 'Audience',
+  algo: 'Algo / plateforme',
+};
+
+export const SIGNAL_HORIZON_LABELS: Record<SignalHorizon, string> = {
+  now: 'Now',
+  next: 'Next',
+  later: 'Later',
+};
+
+// Calcule la semaine ISO au format "YYYY-Www" (ex: "2026-W19")
+export function currentSemaineIso(d: Date = new Date()): string {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNum = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
 }

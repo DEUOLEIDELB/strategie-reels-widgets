@@ -1,30 +1,22 @@
-import { Palette, Type, Settings, ListChecks, Sparkles, Film } from 'lucide-react';
-import { Card, CardBody, Badge } from '@/shared/components';
-import { cn } from '@/shared/lib/utils';
+import { Palette, Type, Settings, ListChecks, Sparkles, Film, Copy, Check, RotateCcw } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { Card, CardBody, Badge, Button } from '@/shared/components';
+import { cn, textOnHex } from '@/shared/lib/utils';
 import { IDENTITE } from '../lib/identite';
 import { CHECKLIST_PRE_TOURNAGE, CHECKLIST_POST_TOURNAGE } from '../lib/checklists';
 import { CHEAT_HOOKS, CHEAT_FORMATS } from '../lib/cheatSheet';
+import { useChecklist } from '../lib/useChecklist';
 
-// Manuel Wubo : 4 blocs lus en 30 secondes pendant la prod.
+// Manuel Wubo : interactif. Couleurs cliquables pour copier le hex,
+// checklists persistantes localStorage (état conservé entre sessions).
 export function ManuelWubo() {
   return (
     <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
       <Bloc title="Identité visuelle" icon={Palette}>
-        <Section label="Palette">
+        <Section label="Palette (click pour copier le hex)">
           <div className="grid grid-cols-2 gap-1.5">
             {IDENTITE.palette.map((c) => (
-              <div key={c.hex} className="flex items-center gap-2 text-[11px]">
-                <span
-                  className="inline-block w-5 h-5 rounded-sm border border-border-strong shrink-0"
-                  style={{ backgroundColor: c.hex }}
-                />
-                <div className="min-w-0">
-                  <div className="font-medium text-text truncate">{c.nom}</div>
-                  <div className="text-text-faint truncate" title={c.usage}>
-                    {c.usage}
-                  </div>
-                </div>
-              </div>
+              <ColorSwatch key={c.hex} hex={c.hex} nom={c.nom} usage={c.usage} />
             ))}
           </div>
         </Section>
@@ -69,20 +61,16 @@ export function ManuelWubo() {
       </Bloc>
 
       <Bloc title="Checklists" icon={ListChecks}>
-        <Section label="Avant tournage">
-          <ul className="flex flex-col gap-0.5">
-            {CHECKLIST_PRE_TOURNAGE.map((c) => (
-              <ChecklistRow key={c.id} label={c.label} detail={c.detail} />
-            ))}
-          </ul>
-        </Section>
-        <Section label="Après tournage / montage">
-          <ul className="flex flex-col gap-0.5">
-            {CHECKLIST_POST_TOURNAGE.map((c) => (
-              <ChecklistRow key={c.id} label={c.label} detail={c.detail} />
-            ))}
-          </ul>
-        </Section>
+        <ChecklistSection
+          storageKey="wubo_checklist_pre_tournage"
+          label="Avant tournage"
+          items={CHECKLIST_PRE_TOURNAGE}
+        />
+        <ChecklistSection
+          storageKey="wubo_checklist_post_tournage"
+          label="Après tournage / montage"
+          items={CHECKLIST_POST_TOURNAGE}
+        />
       </Bloc>
 
       <Bloc title="Cheat sheet hooks" icon={Sparkles}>
@@ -110,6 +98,116 @@ export function ManuelWubo() {
           ))}
         </ul>
       </Bloc>
+    </div>
+  );
+}
+
+function ColorSwatch({ hex, nom, usage }: { hex: string; nom: string; usage: string }) {
+  function copy() {
+    navigator.clipboard.writeText(hex);
+    toast.success(`${hex} copié`);
+  }
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      className={cn(
+        'group flex items-center gap-2 px-1.5 py-1.5 rounded-sm border border-transparent text-left',
+        'hover:bg-surface-alt hover:border-border-strong transition-colors',
+      )}
+      title={`Copier ${hex}`}
+    >
+      <span
+        className="inline-flex items-center justify-center w-7 h-7 rounded-sm border border-border-strong shrink-0 shadow-sm"
+        style={{ backgroundColor: hex, color: textOnHex(hex) }}
+      >
+        <Copy size={11} className="opacity-0 group-hover:opacity-90 transition-opacity" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[11px] font-medium text-text truncate">{nom}</div>
+        <div className="text-[10px] text-text-faint truncate font-mono">{hex}</div>
+        <div className="text-[10px] text-text-faint truncate" title={usage}>
+          {usage}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function ChecklistSection({
+  storageKey,
+  label,
+  items,
+}: {
+  storageKey: string;
+  label: string;
+  items: { id: string; label: string; detail?: string }[];
+}) {
+  const ids = items.map((i) => i.id);
+  const { checked, toggle, reset, doneCount, total, allDone } = useChecklist(storageKey, ids);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] uppercase tracking-wide text-text-faint flex-1">{label}</span>
+        <span
+          className={cn(
+            'text-[10px] tabular-nums',
+            allDone ? 'text-success font-semibold' : 'text-text-faint',
+          )}
+        >
+          {doneCount} / {total}
+        </span>
+        {doneCount > 0 && (
+          <Button variant="ghost" size="sm" onClick={reset}>
+            <RotateCcw size={11} className="mr-1" />
+            Reset
+          </Button>
+        )}
+      </div>
+      <ul className="flex flex-col gap-0.5">
+        {items.map((c) => {
+          const isChecked = checked.has(c.id);
+          return (
+            <li key={c.id}>
+              <button
+                type="button"
+                onClick={() => toggle(c.id)}
+                className={cn(
+                  'w-full flex items-start gap-1.5 px-1.5 py-1 rounded-sm text-left text-[11px]',
+                  'hover:bg-surface-alt transition-colors',
+                  isChecked && 'opacity-60',
+                )}
+              >
+                <span
+                  className={cn(
+                    'inline-flex items-center justify-center w-4 h-4 mt-0.5 rounded-sm border shrink-0',
+                    isChecked
+                      ? 'bg-success border-success text-on-success'
+                      : 'bg-surface border-border-strong',
+                  )}
+                  aria-checked={isChecked}
+                  role="checkbox"
+                >
+                  {isChecked && <Check size={10} strokeWidth={3} />}
+                </span>
+                <div className="flex flex-col gap-0 min-w-0">
+                  <span
+                    className={cn('text-text-dim leading-snug', isChecked && 'line-through')}
+                  >
+                    {c.label}
+                  </span>
+                  {c.detail && (
+                    <span className="text-[10px] text-text-faint italic leading-snug">
+                      {c.detail}
+                    </span>
+                  )}
+                </div>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -151,22 +249,5 @@ function Section({
       </div>
       {children}
     </div>
-  );
-}
-
-function ChecklistRow({ label, detail }: { label: string; detail?: string }) {
-  return (
-    <li
-      className={cn(
-        'text-[11px] text-text-dim flex items-start gap-1.5 leading-snug',
-        detail && 'flex-col gap-0',
-      )}
-    >
-      <div className="flex items-start gap-1.5">
-        <span className="text-text-faint mt-0.5">▢</span>
-        <span>{label}</span>
-      </div>
-      {detail && <span className="text-text-faint italic ml-4">{detail}</span>}
-    </li>
   );
 }

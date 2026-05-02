@@ -1,10 +1,23 @@
 import { useMemo, useState } from 'react';
-import { Search, Globe, Download, Rocket, X } from 'lucide-react';
+import { Search, Globe, Download, Rocket, X, Plus } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useRessources } from '@/shared/hooks/grist';
 import { useDebounce } from '@/shared/hooks/ui';
-import { Input, Skeleton, EmptyState, Tabs, TabsList, TabsTrigger, TabsContent } from '@/shared/components';
+import {
+  Input,
+  Skeleton,
+  EmptyState,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+  Button,
+  ConfirmDialog,
+} from '@/shared/components';
 import { cn, uniqueBy } from '@/shared/lib/utils';
 import { RessourceRow } from './RessourceRow';
+import { RessourceFormModal } from './RessourceFormModal';
+import { useDeleteRessource } from '../lib/mutations';
 import type { RessourceWithAction, RessourceDroits, StockSubTab } from '../types';
 
 const DROITS_DEFAUT_VISIBLES: RessourceDroits[] = ['public_domain', 'cc', 'free', 'freemium'];
@@ -24,6 +37,12 @@ export function StockExterne() {
 
   const { data, isLoading } = useRessources();
   const ressources = (data ?? []) as RessourceWithAction[];
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<RessourceWithAction | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<RessourceWithAction | null>(null);
+
+  const deleteRessource = useDeleteRessource();
 
   const visibles = useMemo(
     () => ressources.filter((r) => !r.archive && r.type_action),
@@ -62,6 +81,25 @@ export function StockExterne() {
     setDroitsActifs((prev) =>
       prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d],
     );
+  }
+
+  function handleNew() {
+    setEditing(null);
+    setModalOpen(true);
+  }
+  function handleEdit(r: RessourceWithAction) {
+    setEditing(r);
+    setModalOpen(true);
+  }
+  async function doDelete() {
+    if (!confirmDelete) return;
+    try {
+      await deleteRessource.mutateAsync(confirmDelete.id);
+      toast.success('Ressource supprimée');
+      setConfirmDelete(null);
+    } catch (e) {
+      toast.error(`Échec : ${(e as Error).message}`);
+    }
   }
 
   const droitsAvailable = useMemo(
@@ -117,6 +155,13 @@ export function StockExterne() {
             );
           })}
         </div>
+
+        <div className="ml-auto">
+          <Button variant="primary" size="sm" onClick={handleNew}>
+            <Plus size={12} className="mr-1" />
+            Nouvelle ressource
+          </Button>
+        </div>
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as StockSubTab)}>
@@ -145,17 +190,40 @@ export function StockExterne() {
           ) : filtered.length === 0 ? (
             <EmptyState
               title="Aucune ressource ne matche."
-              description="Ajuste les droits ou la recherche, ou ajoute via Grist."
+              description="Ajuste les droits ou la recherche, ou ajoute une nouvelle ressource."
+              action={
+                <Button variant="primary" size="sm" onClick={handleNew}>
+                  <Plus size={12} className="mr-1" />
+                  Nouvelle ressource
+                </Button>
+              }
             />
           ) : (
             <div className="flex flex-col gap-1">
               {filtered.map((r) => (
-                <RessourceRow key={r.id} ressource={r} />
+                <RessourceRow
+                  key={r.id}
+                  ressource={r}
+                  onEdit={() => handleEdit(r)}
+                  onDelete={() => setConfirmDelete(r)}
+                />
               ))}
             </div>
           )}
         </TabsContent>
       </Tabs>
+
+      <RessourceFormModal open={modalOpen} onOpenChange={setModalOpen} initial={editing} />
+
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        onOpenChange={(o) => !o && setConfirmDelete(null)}
+        title="Supprimer cette ressource ?"
+        description={`"${confirmDelete?.nom ?? ''}". Cette action est irréversible. Pour la masquer sans la supprimer, utilise plutôt le champ archive dans Grist.`}
+        tone="danger"
+        confirmLabel="Supprimer"
+        onConfirm={doDelete}
+      />
     </div>
   );
 }

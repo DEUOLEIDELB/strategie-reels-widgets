@@ -31,6 +31,7 @@ import {
 } from '@/shared/lib/types';
 import { useAvatars, useAngles, usePainPoints, useReels } from '@/shared/hooks/grist';
 import { canConnect, nextLevelOf } from '../lib/nodeFactory';
+import { slotsForAvatar, slotsForAngle, slotsForPain, slotsForReel, emptySlotsFor } from '../lib/briqueSlots';
 import { NODE_TYPES } from './nodes/nodeTypes';
 import { NodeCallbacksProvider } from './nodes/NodeCallbacksContext';
 import { useDebouncedCanvasSave } from '../hooks/useDebouncedCanvasSave';
@@ -136,40 +137,46 @@ function CanvasInner({ atelier }: Props) {
   const { data: pains } = usePainPoints();
   const { data: reels } = useReels();
 
-  // Hydrate les labels et subtitles depuis Grist (au cas où ils ont changé entre 2 sessions)
+  // Hydrate les labels, subtitles et slots depuis Grist (au cas où ils ont changé entre 2 sessions)
   useEffect(() => {
     if (!avatars || !angles || !pains || !reels) return;
     setNodes((prev) =>
       prev.map((n) => {
         const briqueId = Number((n.data as { briqueId?: number })?.briqueId ?? 0);
+        const nodeType = n.type as AtelierNodeType | undefined;
         let label = String((n.data as { label?: string })?.label ?? '');
         let subtitle: string | undefined;
-        if (n.type === 'avatar') {
+        let slots = emptySlotsFor(nodeType ?? 'avatar');
+        if (nodeType === 'avatar') {
           const a = avatars.find((x) => x.id === briqueId);
           if (a) {
             label = a.prenom || label;
-            subtitle = a.age_range || a.profession;
+            subtitle = [a.age_range, a.lieu].filter(Boolean).join(' · ');
+            slots = slotsForAvatar(a);
           }
-        } else if (n.type === 'angle') {
+        } else if (nodeType === 'angle') {
           const a = angles.find((x) => x.id === briqueId);
           if (a) {
             label = a.nom || label;
-            subtitle = a.ton;
+            subtitle = a.cible_primaire;
+            slots = slotsForAngle(a);
           }
-        } else if (n.type === 'pain') {
+        } else if (nodeType === 'pain') {
           const p = pains.find((x) => x.id === briqueId);
           if (p) {
             label = p.titre || label;
-            subtitle = p.emotion_dominante;
+            subtitle = p.frequence_vecue;
+            slots = slotsForPain(p);
           }
-        } else if (n.type === 'reel') {
+        } else if (nodeType === 'reel') {
           const r = reels.find((x) => x.id === briqueId);
           if (r) {
             label = r.titre || label;
-            subtitle = r.hook_verbal;
+            subtitle = [r.statut, r.duree_sec ? `${r.duree_sec}s` : null].filter(Boolean).join(' · ');
+            slots = slotsForReel(r);
           }
         }
-        return { ...n, data: { ...n.data, label, subtitle } };
+        return { ...n, data: { ...n.data, label, subtitle, slots } };
       }),
     );
   }, [avatars, angles, pains, reels, setNodes]);

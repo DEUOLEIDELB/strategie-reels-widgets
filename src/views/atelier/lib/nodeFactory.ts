@@ -1,11 +1,13 @@
 import type { Node, Edge } from '@xyflow/react';
 import type { AtelierNodeType } from '@/shared/lib/types';
+import type { BriqueSlot } from './briqueSlots';
 
 export interface BriqueNodeData extends Record<string, unknown> {
   briqueId: number;
   type: AtelierNodeType;
   label: string;
   subtitle?: string;
+  slots?: BriqueSlot[];
 }
 
 export type BriqueNode = Node<BriqueNodeData>;

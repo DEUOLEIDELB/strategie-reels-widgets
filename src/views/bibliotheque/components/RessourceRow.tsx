@@ -1,12 +1,14 @@
-import { ExternalLink, Download, Rocket, Star } from 'lucide-react';
+import { ExternalLink, Download, Rocket, Star, Pencil, Trash2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Badge } from '@/shared/components';
+import { Badge, IconButton } from '@/shared/components';
 import { cn } from '@/shared/lib/utils';
 import type { RessourceWithAction, RessourceTypeAction, RessourceDroits } from '../types';
 
 interface Props {
   ressource: RessourceWithAction;
+  onEdit: () => void;
+  onDelete: () => void;
 }
 
 const ACTION_LABEL: Record<RessourceTypeAction, { verbe: string; icone: LucideIcon }> = {
@@ -39,7 +41,7 @@ function Stars({ score }: { score: number }) {
   );
 }
 
-export function RessourceRow({ ressource }: Props) {
+export function RessourceRow({ ressource, onEdit, onDelete }: Props) {
   const action = ACTION_LABEL[ressource.type_action as RessourceTypeAction] || ACTION_LABEL.banque;
   const droits = ressource.droits ? DROITS_TONE[ressource.droits as RessourceDroits] : null;
   const Icon = action.icone;
@@ -55,7 +57,7 @@ export function RessourceRow({ ressource }: Props) {
   return (
     <div
       className={cn(
-        'group grid grid-cols-[1fr_120px_120px_60px_120px] items-center gap-3 px-3 py-2 rounded-md border border-border bg-surface',
+        'group grid grid-cols-[1fr_120px_120px_60px_140px_60px] items-center gap-3 px-3 py-2 rounded-md border border-border bg-surface',
         'hover:bg-surface-alt hover:border-border-strong transition-colors',
       )}
     >
@@ -90,6 +92,10 @@ export function RessourceRow({ ressource }: Props) {
         <Icon size={11} strokeWidth={1.75} />
         {action.verbe}
       </button>
+      <div className="flex items-center gap-0.5 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+        <IconButton icon={Pencil} label="Modifier" tone="default" size="sm" onClick={onEdit} />
+        <IconButton icon={Trash2} label="Supprimer" tone="danger" size="sm" onClick={onDelete} />
+      </div>
     </div>
   );
 }

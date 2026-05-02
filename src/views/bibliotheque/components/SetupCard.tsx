@@ -1,10 +1,12 @@
 import * as Icons from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { Card, CardBody } from '@/shared/components';
+import { Rocket } from 'lucide-react';
+import { Card, CardBody, Button } from '@/shared/components';
 import type { SetupStatic } from '../types';
 
 interface Props {
   setup: SetupStatic;
+  onLaunchSession: () => void;
 }
 
 function getIcon(name: string): LucideIcon {
@@ -12,7 +14,7 @@ function getIcon(name: string): LucideIcon {
   return Lib[name] || Icons.Camera;
 }
 
-export function SetupCard({ setup }: Props) {
+export function SetupCard({ setup, onLaunchSession }: Props) {
   const Icon = getIcon(setup.icone);
 
   return (
@@ -35,6 +37,10 @@ export function SetupCard({ setup }: Props) {
           </ul>
         </div>
         <p className="text-[11px] text-text-faint italic pt-1">ex : {setup.exemple_usage}</p>
+        <Button variant="primary" size="sm" onClick={onLaunchSession} className="mt-1">
+          <Rocket size={12} className="mr-1" />
+          Démarrer une session
+        </Button>
       </CardBody>
     </Card>
   );

@@ -1,10 +1,12 @@
-import { Calendar, MapPin, Users } from 'lucide-react';
+import { Calendar, MapPin, Users, Pencil, Trash2 } from 'lucide-react';
 import type { SessionTournage } from '@/shared/lib/types';
-import { Card, CardBody, Badge } from '@/shared/components';
+import { Card, CardBody, Badge, IconButton } from '@/shared/components';
 import { gristDateToJSDate } from '@/shared/lib/utils';
 
 interface Props {
   session: SessionTournage;
+  onEdit: () => void;
+  onDelete: () => void;
 }
 
 function formatDate(value: number | string | null | undefined): string {
@@ -22,7 +24,7 @@ const STATUT_TONE: Record<string, 'default' | 'warning' | 'success' | 'info'> = 
   tournee: 'success',
 };
 
-export function SessionCard({ session }: Props) {
+export function SessionCard({ session, onEdit, onDelete }: Props) {
   const statutKey = (session.statut || '').toLowerCase().replace(/[\s-]+/g, '_');
   const tone = STATUT_TONE[statutKey] || 'default';
   const reelsCount = session.reels_alimentes
@@ -33,10 +35,16 @@ export function SessionCard({ session }: Props) {
     <Card>
       <CardBody className="flex flex-col gap-2">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="text-sm font-semibold text-text leading-snug">{session.type || 'Session'}</h3>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-semibold text-text leading-snug">{session.type || 'Session'}</h3>
+          </div>
           <Badge variant={tone} size="xs">
             {session.statut || 'sans statut'}
           </Badge>
+          <div className="flex items-center gap-0.5 -mr-1.5 -mt-1">
+            <IconButton icon={Pencil} label="Modifier" tone="default" size="sm" onClick={onEdit} />
+            <IconButton icon={Trash2} label="Supprimer" tone="danger" size="sm" onClick={onDelete} />
+          </div>
         </div>
 
         <div className="flex items-center gap-3 text-[11px] text-text-dim flex-wrap">
@@ -45,9 +53,7 @@ export function SessionCard({ session }: Props) {
             {formatDate(session.date_planifiee)}
           </span>
           {session.duree_estimee_min ? (
-            <span className="inline-flex items-center gap-1">
-              {session.duree_estimee_min} min
-            </span>
+            <span>{session.duree_estimee_min} min</span>
           ) : null}
           {session.lieu && (
             <span className="inline-flex items-center gap-1 truncate" title={session.lieu}>

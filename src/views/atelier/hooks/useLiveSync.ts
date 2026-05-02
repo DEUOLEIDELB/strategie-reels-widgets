@@ -1,27 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
-const POLL_INTERVAL_MS = 3000;
+const POLL_INTERVAL_MS = 1500;
 const QUERY_KEYS = [
   ['ateliers'],
   ['avatars'],
   ['angles'],
-  ['pain_points'],
+  ['painPoints'],
   ['reels'],
 ] as const;
 
 /**
  * Polling périodique pour récupérer les modifs des autres utilisateurs.
  *
- * Limites V1 :
- * - Le canvas en cours d'édition local n'est PAS rechargé (sinon on écraserait les modifs).
- *   Pour voir un canvas modifié par un autre user : changer d'atelier ou recharger la page.
- * - Les briques (avatars/angles/pains/reels) elles, sont rafraîchies en continu
- *   et leurs nouveaux contenus apparaissent dans la sidebar et le drawer édition.
- * - Conflits canvas : last-write-wins (le dernier qui sauvegarde gagne).
+ * Latence perçue :
+ * - Polling 1.5s par défaut → max ~1.5s de latence
+ * - Refetch instantané au retour de focus de la fenêtre (tab switch / minimize)
+ * - Si en iframe Grist : push instantané via window.grist.onRecords
  *
- * Quand l'app tourne en iframe Grist, on s'accroche aussi à window.grist.onRecords
- * pour un push instantané (latence ~50ms vs 5s polling).
+ * Stratégie de conflit canvas (gérée dans CanvasFlow) :
+ * - Tant que tu es en train d'éditer (canvas local diffère du dernier save), on n'écrase pas
+ * - Sinon, reload silencieux du canvas dès qu'un autre user a sauvé
  */
 export function useLiveSync(): { lastSyncedAt: number | null } {
   const qc = useQueryClient();
@@ -43,10 +42,15 @@ export function useLiveSync(): { lastSyncedAt: number | null } {
       if (mounted.current) setLastSyncedAt(Date.now());
     };
 
-    // Premier refresh immédiat
     refresh();
-
     const intervalId = window.setInterval(refresh, POLL_INTERVAL_MS);
+
+    // Refetch instantané quand la fenêtre redevient active
+    const onVisibility = () => {
+      if (!document.hidden) refresh();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', refresh);
 
     // Push instantané quand on est dans l'iframe Grist
     const w = window as unknown as {
@@ -65,6 +69,8 @@ export function useLiveSync(): { lastSyncedAt: number | null } {
 
     return () => {
       window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', refresh);
     };
   }, [qc]);
 

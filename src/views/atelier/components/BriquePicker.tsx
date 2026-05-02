@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
-import { Modal, ModalBody, Input, Skeleton, Badge } from '@/shared/components';
+import { Search, Plus } from 'lucide-react';
+import { Modal, ModalBody, ModalFooter, Input, Skeleton, Badge, Button } from '@/shared/components';
 import { useAvatars, useAngles, usePainPoints, useReels } from '@/shared/hooks/grist';
 import type { AtelierNodeType } from '@/shared/lib/types';
 import { useAtelierView } from '../store';
 import { nodeStyleOf } from '../lib/nodeStyle';
 import { countInstances } from '../lib/nodeFactory';
 import { cn } from '@/shared/lib/utils';
+import { CreateBriqueModal } from './modals/CreateBriqueModal';
 
 const LABELS: Record<AtelierNodeType, string> = {
   avatar: 'avatar',
@@ -101,6 +102,7 @@ function BriquePickerInner({ pending, onClose, addBrique, search, setSearch }: I
   const { items, loading } = usePickerItems(childType);
   const style = nodeStyleOf(childType);
   const nodes = useAtelierView((s) => s.nodes);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -116,6 +118,7 @@ function BriquePickerInner({ pending, onClose, addBrique, search, setSearch }: I
   };
 
   return (
+    <>
     <Modal open onOpenChange={(o) => !o && onClose()} title={`Choisir un ${LABELS[childType]}`}>
       <ModalBody>
         <div className="space-y-3">
@@ -194,6 +197,33 @@ function BriquePickerInner({ pending, onClose, addBrique, search, setSearch }: I
           </div>
         </div>
       </ModalBody>
+      <ModalFooter>
+        <span className="text-[11px] text-text-faint mr-auto">
+          Tu ne trouves pas la bonne brique ?
+        </span>
+        <Button variant="secondary" size="sm" onClick={() => setCreateOpen(true)}>
+          <Plus size={12} />
+          Créer un nouveau {LABELS[childType]}
+        </Button>
+      </ModalFooter>
     </Modal>
+
+    <CreateBriqueModal
+      open={createOpen}
+      type={childType}
+      parentNodeId={parentNodeId}
+      onOpenChange={(o) => {
+        setCreateOpen(o);
+        if (!o) {
+          // Si la création s'est faite, on ferme aussi le picker (la brique est déjà ajoutée au canvas)
+        }
+      }}
+      onCreated={() => {
+        // La brique est ajoutée et connectée au parent automatiquement par CreateBriqueModal.
+        // On ferme le picker.
+        onClose();
+      }}
+    />
+    </>
   );
 }

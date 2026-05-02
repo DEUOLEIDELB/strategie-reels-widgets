@@ -1,8 +1,21 @@
-# Vue 02 : BIBLIOTHÈQUE — Studio Wubo (V2)
+# Vue 02 : BIBLIOTHÈQUE — Studio Wubo (V3)
 
 > **Lis d'abord `01-shared.md` et `02-design-system.md` avant ce doc.**
 
-## Pivot V1.1 → V2 (mai 2026)
+## Évolutions par version
+
+### V3 (mai 2026) : interactivité
+
+V2 livrait un Studio en lecture seule. V3 le rend vivant :
+- **CRUD complet** sur Brolls, Sessions, Ressources via modales react-hook-form-like (state local + mutations TanStack Query).
+- **Preview vidéo inline** dans BrollCard (mp4 / YouTube / Vimeo / Drive auto-détectés).
+- **Click-to-copy** des hex couleurs dans Manuel.
+- **Checklists persistantes** localStorage (état conservé entre sessions, reset par bouton).
+- **Setup quick-launch** : bouton "Démarrer une session" sur chaque setup pré-remplit le formulaire de création de session avec le bon type et l'équipement.
+- 2 colonnes Grist ajoutées sur `Broll` : `url_video`, `url_thumbnail`.
+- Mutations locales dans `views/bibliotheque/lib/mutations.ts` (sans toucher à `shared/`) : useCreate/Update/Delete pour les 3 tables.
+
+### Pivot V1.1 → V2 (mai 2026)
 
 La V1.1 reproduisait dans la Bibliothèque l'injection de Hooks/Scripts qui se fait déjà dans la sidebar Atelier. **Doublon supprimé.** La Bibliothèque devient le **Studio de production** : tout ce qu'il faut **après** l'Atelier pour passer du Reel composé au Reel publié.
 

@@ -1,12 +1,28 @@
 import { useMemo, useState } from 'react';
-import { Search, Film, Calendar, Camera, X } from 'lucide-react';
+import { Search, Film, Calendar, Camera, X, Plus } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useBroll, useSessions } from '@/shared/hooks/grist';
 import { useDebounce } from '@/shared/hooks/ui';
-import { Input, Skeleton, EmptyState, Tabs, TabsList, TabsTrigger, TabsContent } from '@/shared/components';
+import {
+  Input,
+  Skeleton,
+  EmptyState,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+  Button,
+  ConfirmDialog,
+} from '@/shared/components';
+import type { SessionTournage } from '@/shared/lib/types';
 import { BrollCard } from './BrollCard';
 import { SessionCard } from './SessionCard';
 import { SetupCard } from './SetupCard';
+import { BrollFormModal } from './BrollFormModal';
+import { SessionFormModal } from './SessionFormModal';
 import { SETUPS } from '../lib/setups';
+import { useDeleteBroll, useDeleteSession } from '../lib/mutations';
+import type { BrollWithVideo } from '../types';
 
 type SubTab = 'brolls' | 'sessions' | 'setups';
 
@@ -18,18 +34,31 @@ export function PlateauWubo() {
 
   const { data: brolls, isLoading: loadingBrolls } = useBroll();
   const { data: sessions, isLoading: loadingSessions } = useSessions();
+  const brollsTyped = (brolls ?? []) as BrollWithVideo[];
+
+  // Modal states
+  const [brollModalOpen, setBrollModalOpen] = useState(false);
+  const [editingBroll, setEditingBroll] = useState<BrollWithVideo | null>(null);
+  const [sessionModalOpen, setSessionModalOpen] = useState(false);
+  const [editingSession, setEditingSession] = useState<SessionTournage | null>(null);
+  const [sessionPrefill, setSessionPrefill] = useState<{ type: string; equipement: string } | null>(null);
+
+  const [confirmDeleteBroll, setConfirmDeleteBroll] = useState<BrollWithVideo | null>(null);
+  const [confirmDeleteSession, setConfirmDeleteSession] = useState<SessionTournage | null>(null);
+
+  const deleteBroll = useDeleteBroll();
+  const deleteSession = useDeleteSession();
 
   const filteredBrolls = useMemo(() => {
-    if (!brolls) return [];
     const q = debounced.trim().toLowerCase();
-    return brolls.filter((b) => {
+    return brollsTyped.filter((b) => {
       if (q && !`${b.code ?? ''} ${b.description_plan ?? ''} ${b.setup_technique ?? ''}`
         .toLowerCase().includes(q)) return false;
       if (orphelinsOnly && b.reels_qui_utilisent && b.reels_qui_utilisent.trim() !== '')
         return false;
       return true;
     });
-  }, [brolls, debounced, orphelinsOnly]);
+  }, [brollsTyped, debounced, orphelinsOnly]);
 
   const filteredSessions = useMemo(() => {
     if (!sessions) return [];
@@ -47,6 +76,55 @@ export function PlateauWubo() {
     sessions: filteredSessions.length,
     setups: SETUPS.length,
   };
+
+  function handleNewBroll() {
+    setEditingBroll(null);
+    setBrollModalOpen(true);
+  }
+  function handleEditBroll(b: BrollWithVideo) {
+    setEditingBroll(b);
+    setBrollModalOpen(true);
+  }
+  function handleNewSession() {
+    setEditingSession(null);
+    setSessionPrefill(null);
+    setSessionModalOpen(true);
+  }
+  function handleEditSession(s: SessionTournage) {
+    setEditingSession(s);
+    setSessionPrefill(null);
+    setSessionModalOpen(true);
+  }
+  function handleLaunchFromSetup(setup: typeof SETUPS[number]) {
+    setEditingSession(null);
+    setSessionPrefill({
+      type: setup.nom,
+      equipement: setup.equipement.join(', '),
+    });
+    setSessionModalOpen(true);
+    setTab('sessions');
+  }
+
+  async function doDeleteBroll() {
+    if (!confirmDeleteBroll) return;
+    try {
+      await deleteBroll.mutateAsync(confirmDeleteBroll.id);
+      toast.success('B-roll supprimé');
+      setConfirmDeleteBroll(null);
+    } catch (e) {
+      toast.error(`Échec : ${(e as Error).message}`);
+    }
+  }
+  async function doDeleteSession() {
+    if (!confirmDeleteSession) return;
+    try {
+      await deleteSession.mutateAsync(confirmDeleteSession.id);
+      toast.success('Session supprimée');
+      setConfirmDeleteSession(null);
+    } catch (e) {
+      toast.error(`Échec : ${(e as Error).message}`);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -79,9 +157,24 @@ export function PlateauWubo() {
               onChange={(e) => setOrphelinsOnly(e.target.checked)}
               className="cursor-pointer"
             />
-            Uniquement les orphelins (jamais réutilisés)
+            Orphelins uniquement
           </label>
         )}
+
+        <div className="ml-auto">
+          {tab === 'brolls' && (
+            <Button variant="primary" size="sm" onClick={handleNewBroll}>
+              <Plus size={12} className="mr-1" />
+              Nouveau B-roll
+            </Button>
+          )}
+          {tab === 'sessions' && (
+            <Button variant="primary" size="sm" onClick={handleNewSession}>
+              <Plus size={12} className="mr-1" />
+              Nouvelle session
+            </Button>
+          )}
+        </div>
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as SubTab)}>
@@ -104,15 +197,24 @@ export function PlateauWubo() {
           {loadingBrolls ? (
             <Grid>
               {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-32" />
+                <Skeleton key={i} className="h-64" />
               ))}
             </Grid>
           ) : filteredBrolls.length === 0 ? (
-            <EmptyBrolls hasSearch={Boolean(debounced || orphelinsOnly)} totalCount={brolls?.length ?? 0} />
+            <EmptyBrolls
+              hasSearch={Boolean(debounced || orphelinsOnly)}
+              totalCount={brollsTyped.length}
+              onCreate={handleNewBroll}
+            />
           ) : (
             <Grid>
               {filteredBrolls.map((b) => (
-                <BrollCard key={b.id} broll={b} />
+                <BrollCard
+                  key={b.id}
+                  broll={b}
+                  onEdit={() => handleEditBroll(b)}
+                  onDelete={() => setConfirmDeleteBroll(b)}
+                />
               ))}
             </Grid>
           )}
@@ -126,11 +228,20 @@ export function PlateauWubo() {
               ))}
             </Grid>
           ) : filteredSessions.length === 0 ? (
-            <EmptySessions hasSearch={Boolean(debounced)} totalCount={sessions?.length ?? 0} />
+            <EmptySessions
+              hasSearch={Boolean(debounced)}
+              totalCount={sessions?.length ?? 0}
+              onCreate={handleNewSession}
+            />
           ) : (
             <Grid>
               {filteredSessions.map((s) => (
-                <SessionCard key={s.id} session={s} />
+                <SessionCard
+                  key={s.id}
+                  session={s}
+                  onEdit={() => handleEditSession(s)}
+                  onDelete={() => setConfirmDeleteSession(s)}
+                />
               ))}
             </Grid>
           )}
@@ -139,11 +250,42 @@ export function PlateauWubo() {
         <TabsContent value="setups" className="pt-3">
           <Grid>
             {SETUPS.map((s) => (
-              <SetupCard key={s.id} setup={s} />
+              <SetupCard key={s.id} setup={s} onLaunchSession={() => handleLaunchFromSetup(s)} />
             ))}
           </Grid>
         </TabsContent>
       </Tabs>
+
+      <BrollFormModal
+        open={brollModalOpen}
+        onOpenChange={setBrollModalOpen}
+        initial={editingBroll}
+      />
+      <SessionFormModal
+        open={sessionModalOpen}
+        onOpenChange={setSessionModalOpen}
+        initial={editingSession}
+        prefill={sessionPrefill}
+      />
+
+      <ConfirmDialog
+        open={Boolean(confirmDeleteBroll)}
+        onOpenChange={(o) => !o && setConfirmDeleteBroll(null)}
+        title="Supprimer ce B-roll ?"
+        description={`"${confirmDeleteBroll?.description_plan?.slice(0, 80) ?? ''}". Cette action est irréversible.`}
+        tone="danger"
+        confirmLabel="Supprimer"
+        onConfirm={doDeleteBroll}
+      />
+      <ConfirmDialog
+        open={Boolean(confirmDeleteSession)}
+        onOpenChange={(o) => !o && setConfirmDeleteSession(null)}
+        title="Supprimer cette session ?"
+        description={`"${confirmDeleteSession?.type ?? ''}". Cette action est irréversible.`}
+        tone="danger"
+        confirmLabel="Supprimer"
+        onConfirm={doDeleteSession}
+      />
     </div>
   );
 }
@@ -154,38 +296,66 @@ function Grid({ children }: { children: React.ReactNode }) {
   );
 }
 
-function EmptyBrolls({ hasSearch, totalCount }: { hasSearch: boolean; totalCount: number }) {
+function EmptyBrolls({
+  hasSearch,
+  totalCount,
+  onCreate,
+}: {
+  hasSearch: boolean;
+  totalCount: number;
+  onCreate: () => void;
+}) {
   if (totalCount === 0) {
     return (
       <EmptyState
         icon={<Film size={24} />}
         title="Aucun B-roll enregistré"
-        description="Ajoute tes plans réutilisables dans la table Broll de Grist. Code, description, durée, statut."
+        description="Ajoute tes plans réutilisables : code, description, durée, statut, et une URL vidéo pour visualiser."
+        action={
+          <Button variant="primary" size="sm" onClick={onCreate}>
+            <Plus size={12} className="mr-1" />
+            Créer le premier B-roll
+          </Button>
+        }
       />
     );
   }
   return (
     <EmptyState
       title={hasSearch ? 'Aucun B-roll ne matche tes filtres.' : 'Aucun B-roll.'}
-      description={hasSearch ? 'Essaie de retirer des filtres.' : 'Ajoute via Grist.'}
+      description={hasSearch ? 'Essaie de retirer des filtres.' : 'Ajoute via le bouton ci-dessus.'}
     />
   );
 }
 
-function EmptySessions({ hasSearch, totalCount }: { hasSearch: boolean; totalCount: number }) {
+function EmptySessions({
+  hasSearch,
+  totalCount,
+  onCreate,
+}: {
+  hasSearch: boolean;
+  totalCount: number;
+  onCreate: () => void;
+}) {
   if (totalCount === 0) {
     return (
       <EmptyState
         icon={<Calendar size={24} />}
         title="Aucune session de tournage planifiée"
-        description="Planifie ton prochain batch dans la table Sessions_tournage : type, date, lieu, équipement, Reels alimentés."
+        description="Planifie ton prochain batch : type, date, lieu, équipement, Reels alimentés."
+        action={
+          <Button variant="primary" size="sm" onClick={onCreate}>
+            <Plus size={12} className="mr-1" />
+            Créer la première session
+          </Button>
+        }
       />
     );
   }
   return (
     <EmptyState
       title={hasSearch ? 'Aucune session ne matche.' : 'Aucune session.'}
-      description={hasSearch ? 'Essaie de retirer des filtres.' : 'Planifie via Grist.'}
+      description={hasSearch ? 'Essaie de retirer des filtres.' : 'Ajoute via le bouton ci-dessus.'}
     />
   );
 }

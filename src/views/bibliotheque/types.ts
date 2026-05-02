@@ -1,6 +1,13 @@
-// Types locaux Studio Bibliothèque V2.
+// Types locaux Studio Bibliothèque V2 / V3.
 
-import type { Ressource } from '@/shared/lib/types';
+import type { Ressource, BrollPlan } from '@/shared/lib/types';
+
+// Broll avec colonnes ajoutées en mai 2026 sur Grist (url_video, url_thumbnail).
+// Cast local jusqu'à promotion shared.
+export interface BrollWithVideo extends BrollPlan {
+  url_video?: string | '';
+  url_thumbnail?: string | '';
+}
 
 export type Section = 'plateau' | 'stock' | 'manuel';
 

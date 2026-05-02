@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Search, Users, Compass, AlertTriangle, Film } from 'lucide-react';
-import { Input, Tabs, TabsList, TabsTrigger, TabsContent, Skeleton, Badge } from '@/shared/components';
+import { Search, Users, Compass, AlertTriangle, Film, Plus } from 'lucide-react';
+import { Input, Tabs, TabsList, TabsTrigger, TabsContent, Skeleton, Badge, Button } from '@/shared/components';
 import { useAvatars, useAngles, usePainPoints, useReels } from '@/shared/hooks/grist';
 import { cn } from '@/shared/lib/utils';
 import type { AtelierNodeType } from '@/shared/lib/types';
 import { countInstances } from '../lib/nodeFactory';
 import { useAtelierView } from '../store';
+import { CreateBriqueModal } from './modals/CreateBriqueModal';
 
 interface BriqueItem {
   id: number;
@@ -102,9 +103,17 @@ function BriqueSection({ type, items, loading, search }: SectionProps) {
   );
 }
 
+const TAB_LABEL: Record<AtelierNodeType, string> = {
+  avatar: 'avatar',
+  angle: 'angle',
+  pain: 'pain',
+  reel: 'reel',
+};
+
 export function BibliothequeSidebar() {
   const [tab, setTab] = useState<AtelierNodeType>('avatar');
   const [search, setSearch] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
 
   const avatars = useAvatars();
   const angles = useAngles();
@@ -153,9 +162,15 @@ export function BibliothequeSidebar() {
 
   return (
     <aside className="w-[300px] shrink-0 border-l border-border bg-surface flex flex-col h-full">
-      <div className="px-3 py-2.5 border-b border-border">
-        <div className="text-[11px] uppercase tracking-wide text-text-faint font-semibold mb-1.5">
-          Bibliothèque
+      <div className="px-3 py-2.5 border-b border-border space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-[11px] uppercase tracking-wide text-text-faint font-semibold">
+            Bibliothèque
+          </div>
+          <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)} className="h-6 px-2 text-[11px]">
+            <Plus size={11} />
+            Nouveau {TAB_LABEL[tab]}
+          </Button>
         </div>
         <div className="relative">
           <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted" />
@@ -207,6 +222,8 @@ export function BibliothequeSidebar() {
       <div className="px-3 py-2 border-t border-border text-[10px] text-text-faint leading-relaxed">
         Glisse une brique vers le canvas. Cascade : avatar → angle → pain → reel.
       </div>
+
+      <CreateBriqueModal open={createOpen} type={tab} onOpenChange={setCreateOpen} />
     </aside>
   );
 }

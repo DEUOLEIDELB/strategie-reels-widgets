@@ -6,7 +6,7 @@ import { resolve } from 'path';
 // Le router interne (Shell + setView) bascule entre les 3 vues.
 export default defineConfig({
   plugins: [react()],
-  base: './',
+  base: '/strategie-reels-widgets/',
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

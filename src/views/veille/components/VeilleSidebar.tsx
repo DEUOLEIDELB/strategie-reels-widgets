@@ -16,25 +16,44 @@ interface BlocDef {
   description: string;
   icon: LucideIcon;
   count?: number;
+  countTone?: 'accent' | 'danger' | 'success';
+  badge?: string;
   highlight?: boolean;
 }
 
 interface Props {
   pulseCount?: number;
+  pulseViraux?: number;
   syntheseCount?: number;
+  syntheseStatut?: 'manquante' | 'vide' | 'partielle' | 'prete';
 }
 
-export function VeilleSidebar({ pulseCount, syntheseCount }: Props) {
+export function VeilleSidebar({ pulseCount, pulseViraux, syntheseStatut }: Props) {
   const bloc = useVeilleStore((s) => s.bloc);
   const setBloc = useVeilleStore((s) => s.setBloc);
+
+  const SYNTH_BADGES: Record<
+    'manquante' | 'vide' | 'partielle' | 'prete',
+    { label: string; tone: BlocDef['countTone'] }
+  > = {
+    manquante: { label: 'à créer', tone: 'danger' },
+    vide: { label: 'vide', tone: 'accent' },
+    partielle: { label: 'en cours', tone: 'accent' },
+    prete: { label: 'prête', tone: 'success' },
+  };
+  const synthBadge = SYNTH_BADGES[syntheseStatut || 'vide'];
 
   const BLOCS: BlocDef[] = [
     {
       id: 'pulse-concurrents',
       label: 'Pulse Concurrents',
-      description: 'Feed des Reels',
+      description:
+        pulseViraux && pulseViraux > 0
+          ? `${pulseViraux} viral${pulseViraux > 1 ? 'aux' : ''} cette semaine`
+          : 'Feed des Reels',
       icon: Flame,
       count: pulseCount,
+      countTone: pulseViraux && pulseViraux > 0 ? 'danger' : 'accent',
       highlight: true,
     },
     {
@@ -66,7 +85,8 @@ export function VeilleSidebar({ pulseCount, syntheseCount }: Props) {
       label: 'Synthèse hebdo',
       description: 'Le livrable',
       icon: ClipboardList,
-      count: syntheseCount,
+      badge: synthBadge.label,
+      countTone: synthBadge.tone,
     },
   ];
 
@@ -122,10 +142,30 @@ export function VeilleSidebar({ pulseCount, syntheseCount }: Props) {
                         'inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-semibold',
                         active
                           ? 'bg-current text-on-current'
-                          : 'bg-accent text-on-accent',
+                          : b.countTone === 'danger'
+                            ? 'bg-danger text-on-danger animate-pulse'
+                            : b.countTone === 'success'
+                              ? 'bg-success text-on-success'
+                              : 'bg-accent text-on-accent',
                       )}
                     >
                       {b.count > 99 ? '99+' : b.count}
+                    </span>
+                  )}
+                  {b.badge && (
+                    <span
+                      className={cn(
+                        'inline-flex items-center px-1.5 h-[18px] rounded-sm text-[10px] font-semibold whitespace-nowrap',
+                        active
+                          ? 'bg-current text-on-current'
+                          : b.countTone === 'danger'
+                            ? 'bg-danger-soft text-danger border border-danger/30'
+                            : b.countTone === 'success'
+                              ? 'bg-success-soft text-success border border-success/30'
+                              : 'bg-accent-soft text-accent border border-accent/30',
+                      )}
+                    >
+                      {b.badge}
                     </span>
                   )}
                 </span>

@@ -1,14 +1,32 @@
-import { ExternalLink, Heart, MessageCircle, Eye, Calendar, Trash2, Sparkles } from 'lucide-react';
-import { Drawer, Button, IconButton } from '@/shared/components';
+import { useState } from 'react';
+import {
+  ExternalLink,
+  Heart,
+  MessageCircle,
+  Eye,
+  Calendar,
+  Trash2,
+  Sparkles,
+  Pencil,
+  Check,
+  X,
+} from 'lucide-react';
+import { Drawer, Button, IconButton, Input, Select } from '@/shared/components';
 import {
   useDeletePostConcurrent,
+  useUpdatePostConcurrent,
   useCreateReel,
 } from '@/shared/hooks/grist';
 import { useAppStore } from '@/shared/store';
-import type { PostConcurrent, Concurrent } from '@/shared/lib/types';
-import { POST_FORMAT_LABELS } from '@/shared/lib/types';
+import type {
+  PostConcurrent,
+  Concurrent,
+  PostFormat,
+} from '@/shared/lib/types';
+import { POST_FORMAT_LABELS, POST_FORMATS } from '@/shared/lib/types';
 import toast from 'react-hot-toast';
 import { cn } from '@/shared/lib/utils';
+import { PostEmbed } from './PostEmbed';
 
 interface Props {
   post: PostConcurrent | null;
@@ -32,10 +50,46 @@ function fmtDate(d: number | string | null | undefined): string {
 
 export function ConcurrentPostDrawer({ post, concurrent, open, onOpenChange, onCapturer }: Props) {
   const del = useDeletePostConcurrent();
+  const update = useUpdatePostConcurrent();
   const createReel = useCreateReel();
   const setView = useAppStore((s) => s.setView);
 
+  const [editingMetrics, setEditingMetrics] = useState(false);
+  const [draftVues, setDraftVues] = useState<number | ''>('');
+  const [draftLikes, setDraftLikes] = useState<number | ''>('');
+  const [draftComments, setDraftComments] = useState<number | ''>('');
+  const [draftFormat, setDraftFormat] = useState<PostFormat | ''>('');
+
   if (!post) return null;
+
+  function startEdit() {
+    setDraftVues(post!.vues || '');
+    setDraftLikes(post!.likes || '');
+    setDraftComments(post!.comments || '');
+    setDraftFormat(post!.format_detecte || '');
+    setEditingMetrics(true);
+  }
+
+  function saveEdit() {
+    update.mutate(
+      {
+        id: post!.id,
+        fields: {
+          vues: typeof draftVues === 'number' ? draftVues : 0,
+          likes: typeof draftLikes === 'number' ? draftLikes : 0,
+          comments: typeof draftComments === 'number' ? draftComments : 0,
+          format_detecte: (draftFormat || '') as PostFormat,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success('Métriques mises à jour');
+          setEditingMetrics(false);
+        },
+        onError: (e) => toast.error(`Échec : ${(e as Error).message}`),
+      },
+    );
+  }
 
   function handleDelete() {
     if (!confirm('Supprimer ce post du feed ?')) return;
@@ -70,41 +124,98 @@ export function ConcurrentPostDrawer({ post, concurrent, open, onOpenChange, onC
   const score = post.score_viralite || 0;
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange} title={concurrent?.nom || 'Post concurrent'} width={480}>
+    <Drawer open={open} onOpenChange={onOpenChange} title={concurrent?.nom || 'Post concurrent'} width={520}>
       <div className="flex flex-col">
-        {/* Visual hero */}
-        <div className="relative aspect-[9/16] bg-text/5 max-h-[50vh] overflow-hidden">
-          {post.thumbnail_url ? (
-            <img src={post.thumbnail_url} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-text-muted">
-              Pas de thumbnail
-            </div>
-          )}
-          {/* Score viralité badge */}
+        {/* Embed player */}
+        <div className="relative bg-black max-h-[55vh] overflow-hidden">
+          <PostEmbed post={post} />
+          {/* Score viralité badge overlay */}
           {score >= 1 && (
-            <div className="absolute top-3 left-3 px-2 py-1 rounded-md bg-black/60 backdrop-blur-sm text-white text-xs font-bold">
+            <div className="absolute top-3 left-3 px-2 py-1 rounded-md bg-black/70 backdrop-blur-sm text-white text-xs font-bold pointer-events-none">
               Score viralité : ×{score.toFixed(1)}
             </div>
           )}
-          {/* External link */}
           {post.url_post && (
             <a
               href={post.url_post}
               target="_blank"
               rel="noopener"
-              className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-1 rounded-md bg-black/60 backdrop-blur-sm text-white text-xs font-medium hover:bg-black/80"
+              className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-1 rounded-md bg-black/70 backdrop-blur-sm text-white text-xs font-medium hover:bg-black/90 z-10"
             >
               Ouvrir <ExternalLink size={12} />
             </a>
           )}
         </div>
 
-        {/* Stats grid */}
-        <div className="grid grid-cols-3 border-b border-border">
-          <Stat icon={<Eye size={14} />} label="Vues" value={fmtNum(post.vues)} />
-          <Stat icon={<Heart size={14} />} label="Likes" value={fmtNum(post.likes)} />
-          <Stat icon={<MessageCircle size={14} />} label="Comments" value={fmtNum(post.comments)} />
+        {/* Stats grid (éditable) */}
+        <div className="border-b border-border">
+          {editingMetrics ? (
+            <div className="p-3 flex flex-col gap-2 bg-current-soft/40">
+              <div className="grid grid-cols-3 gap-2">
+                <Input
+                  type="number"
+                  size="sm"
+                  value={draftVues}
+                  onChange={(e) => setDraftVues(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="Vues"
+                />
+                <Input
+                  type="number"
+                  size="sm"
+                  value={draftLikes}
+                  onChange={(e) => setDraftLikes(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="Likes"
+                />
+                <Input
+                  type="number"
+                  size="sm"
+                  value={draftComments}
+                  onChange={(e) => setDraftComments(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="Comments"
+                />
+              </div>
+              <Select
+                size="sm"
+                value={draftFormat}
+                onChange={(e) => setDraftFormat(e.target.value as PostFormat | '')}
+              >
+                <option value="">— Non classé —</option>
+                {POST_FORMATS.map((f) => (
+                  <option key={f} value={f}>
+                    {POST_FORMAT_LABELS[f]}
+                  </option>
+                ))}
+              </Select>
+              <div className="flex justify-end gap-1">
+                <IconButton
+                  icon={X}
+                  label="Annuler"
+                  size="sm"
+                  onClick={() => setEditingMetrics(false)}
+                />
+                <IconButton
+                  icon={Check}
+                  label="Enregistrer"
+                  size="sm"
+                  tone="primary"
+                  onClick={saveEdit}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 relative group">
+              <Stat icon={<Eye size={14} />} label="Vues" value={fmtNum(post.vues)} />
+              <Stat icon={<Heart size={14} />} label="Likes" value={fmtNum(post.likes)} />
+              <Stat icon={<MessageCircle size={14} />} label="Comments" value={fmtNum(post.comments)} />
+              <button
+                onClick={startEdit}
+                className="absolute top-1 right-1 p-1 rounded-sm opacity-0 group-hover:opacity-100 text-text-faint hover:text-text hover:bg-surface-alt transition-opacity"
+                title="Éditer les métriques"
+              >
+                <Pencil size={12} />
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="p-4 flex flex-col gap-4">

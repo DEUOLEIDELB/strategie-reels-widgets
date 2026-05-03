@@ -20,6 +20,8 @@ import { POST_FORMATS, POST_FORMAT_LABELS } from '@/shared/lib/types';
 import { ConcurrentPostCard } from './ConcurrentPostCard';
 import { ConcurrentPostDrawer } from './ConcurrentPostDrawer';
 import { AjouterPostModal } from './AjouterPostModal';
+import { InsightsBar } from './InsightsBar';
+import { withComputedScores } from './lib/viralScore';
 
 interface Props {
   onCapturer: (ctx: {
@@ -49,8 +51,14 @@ export function PulseConcurrents({ onCapturer }: Props) {
     return m;
   }, [concurrentsQ.data]);
 
+  // Recalcule les scores de viralité en mémoire à chaque update du feed
+  const postsWithScores = useMemo(
+    () => withComputedScores(postsQ.data || []),
+    [postsQ.data],
+  );
+
   const filtered = useMemo(() => {
-    let out: PostConcurrent[] = postsQ.data || [];
+    let out: PostConcurrent[] = postsWithScores;
     if (filterConcurrent !== '') {
       out = out.filter((p) => p.concurrent === filterConcurrent);
     }
@@ -79,9 +87,9 @@ export function PulseConcurrents({ onCapturer }: Props) {
       return db - da;
     });
     return out;
-  }, [postsQ.data, filterConcurrent, filterPlateforme, filterFormat, filterFenetre, filterTop]);
+  }, [postsWithScores, filterConcurrent, filterPlateforme, filterFormat, filterFenetre, filterTop]);
 
-  const opened = (postsQ.data || []).find((p) => p.id === openId) || null;
+  const opened = postsWithScores.find((p) => p.id === openId) || null;
 
   const filterActive =
     !!filterConcurrent || !!filterPlateforme || !!filterFormat || filterFenetre !== '30' || filterTop !== 'all';
@@ -116,6 +124,9 @@ export function PulseConcurrents({ onCapturer }: Props) {
           Ajouter un post
         </Button>
       </div>
+
+      {/* Insights bar */}
+      <InsightsBar posts={postsWithScores} concurrents={concurrentsById} />
 
       {/* Filter bar */}
       <div className="px-5 py-2 border-b border-border bg-surface-two flex items-center gap-2 flex-wrap shrink-0">

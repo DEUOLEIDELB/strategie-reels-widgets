@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
+import { Loader2, Sparkles, ImageOff, ChevronDown, Wand2 } from 'lucide-react';
 import {
   Modal,
   ModalBody,
@@ -8,18 +9,20 @@ import {
   FormField,
   Input,
   Select,
+  Spinner,
 } from '@/shared/components';
 import {
   useCreatePostConcurrent,
   useConcurrents,
 } from '@/shared/hooks/grist';
 import {
-  POST_PLATEFORMES,
   POST_FORMATS,
   POST_FORMAT_LABELS,
   type PostFormat,
   type PostPlateforme,
 } from '@/shared/lib/types';
+import { fetchPostMeta, detectPlateforme } from './lib/postMeta';
+import { cn } from '@/shared/lib/utils';
 
 interface Props {
   open: boolean;
@@ -27,12 +30,7 @@ interface Props {
   defaultConcurrent?: number;
 }
 
-function detectPlateforme(url: string): PostPlateforme | '' {
-  if (/instagram\.com/i.test(url)) return 'instagram';
-  if (/tiktok\.com/i.test(url)) return 'tiktok';
-  if (/(youtube\.com|youtu\.be)/i.test(url)) return 'youtube';
-  return '';
-}
+type FetchStatus = 'idle' | 'loading' | 'success' | 'partial' | 'error';
 
 export function AjouterPostModal({ open, onOpenChange, defaultConcurrent }: Props) {
   const create = useCreatePostConcurrent();
@@ -47,25 +45,58 @@ export function AjouterPostModal({ open, onOpenChange, defaultConcurrent }: Prop
   const [likes, setLikes] = useState<number | ''>('');
   const [comments, setComments] = useState<number | ''>('');
   const [format, setFormat] = useState<PostFormat | ''>('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
+  const [fetchStatus, setFetchStatus] = useState<FetchStatus>('idle');
+  const [fetchedAuthor, setFetchedAuthor] = useState('');
+  const lastFetchedUrl = useRef<string>('');
+
+  // Reset à l'ouverture
   useEffect(() => {
     if (open) {
       setUrl('');
       setConcurrent(defaultConcurrent ?? '');
       setPlateforme('');
       setThumbnail('');
-      setDatePost(new Date().toISOString().slice(0, 10));
+      setDatePost('');
       setVues('');
       setLikes('');
       setComments('');
       setFormat('');
+      setShowAdvanced(false);
+      setFetchStatus('idle');
+      setFetchedAuthor('');
+      lastFetchedUrl.current = '';
     }
   }, [open, defaultConcurrent]);
 
-  // Auto-detect platform from URL
+  // Auto-detect plateforme dès qu'on saisit (instant)
   useEffect(() => {
     const p = detectPlateforme(url);
     if (p) setPlateforme(p);
+  }, [url]);
+
+  // Auto-fetch métadonnées (debounce 600ms après dernière frappe)
+  useEffect(() => {
+    const u = url.trim();
+    if (!u || u === lastFetchedUrl.current) return;
+    if (!detectPlateforme(u)) return;
+    const handle = setTimeout(async () => {
+      lastFetchedUrl.current = u;
+      setFetchStatus('loading');
+      try {
+        const meta = await fetchPostMeta(u);
+        setFetchedAuthor(meta.author);
+        if (meta.thumbnail_url) setThumbnail(meta.thumbnail_url);
+        if (meta.date_post) setDatePost(meta.date_post);
+        if (meta.plateforme) setPlateforme(meta.plateforme);
+        const got = !!meta.thumbnail_url || !!meta.date_post || !!meta.author;
+        setFetchStatus(got ? 'success' : 'partial');
+      } catch {
+        setFetchStatus('error');
+      }
+    }, 600);
+    return () => clearTimeout(handle);
   }, [url]);
 
   const canSubmit = !!url.trim() && !!concurrent && !!plateforme;
@@ -97,117 +128,194 @@ export function AjouterPostModal({ open, onOpenChange, defaultConcurrent }: Prop
     );
   }
 
+  function applyAuthorAsConcurrent() {
+    if (!fetchedAuthor || !concurrentsQ.data) return;
+    const norm = fetchedAuthor.toLowerCase().replace(/[@\s]/g, '');
+    const match = concurrentsQ.data.find((c) => {
+      const u = (c.username_ig || '').toLowerCase().replace(/[@\s]/g, '');
+      const n = (c.nom || '').toLowerCase().replace(/\s/g, '');
+      return u === norm || n === norm;
+    });
+    if (match) setConcurrent(match.id);
+  }
+
   return (
     <Modal open={open} onOpenChange={onOpenChange} title="Ajouter un post concurrent" size="md">
       <ModalBody>
         <div className="flex flex-col gap-3">
-          <FormField label="URL du post" required hint="Instagram / TikTok / YouTube">
-            <Input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://www.instagram.com/p/..."
-              autoFocus
-            />
+          {/* URL : champ unique principal */}
+          <FormField label="URL du post" required hint="Instagram / TikTok / YouTube. Le reste se remplit tout seul.">
+            <div className="relative">
+              <Input
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://www.instagram.com/p/..."
+                autoFocus
+              />
+              {fetchStatus === 'loading' && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs text-current">
+                  <Loader2 size={12} className="animate-spin" />
+                  Recherche…
+                </div>
+              )}
+            </div>
           </FormField>
 
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Concurrent" required>
-              <Select
-                value={concurrent === '' ? '' : String(concurrent)}
-                onChange={(e) => setConcurrent(e.target.value ? Number(e.target.value) : '')}
-              >
-                <option value="">— Choisir —</option>
-                {(concurrentsQ.data || []).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nom}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-            <FormField label="Plateforme" required>
-              <Select
-                value={plateforme}
-                onChange={(e) => setPlateforme(e.target.value as PostPlateforme | '')}
-              >
-                <option value="">— Auto —</option>
-                {POST_PLATEFORMES.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-          </div>
+          {/* Aperçu auto-fetch */}
+          {plateforme && (
+            <div className="flex gap-3 p-2 rounded-md bg-surface-two border border-border">
+              <div className="w-20 aspect-[9/16] shrink-0 rounded-sm overflow-hidden bg-surface-alt flex items-center justify-center">
+                {thumbnail ? (
+                  <img src={thumbnail} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <ImageOff size={20} className="text-text-muted" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0 flex flex-col justify-between text-xs">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-1.5 py-0.5 rounded-sm bg-surface-alt text-[10px] font-semibold uppercase tracking-wide">
+                      {plateforme}
+                    </span>
+                    {fetchStatus === 'success' && (
+                      <span className="inline-flex items-center gap-0.5 text-success font-medium">
+                        <Sparkles size={10} /> Auto-rempli
+                      </span>
+                    )}
+                    {fetchStatus === 'partial' && (
+                      <span className="text-warning font-medium">Partiel, complète manuellement</span>
+                    )}
+                    {fetchStatus === 'error' && (
+                      <span className="text-danger font-medium">Échec auto-fetch</span>
+                    )}
+                  </div>
+                  {fetchedAuthor && (
+                    <div className="mt-1 text-text-dim">
+                      Créateur détecté : <span className="font-semibold text-text">{fetchedAuthor}</span>
+                      {concurrent === '' && (
+                        <button
+                          type="button"
+                          onClick={applyAuthorAsConcurrent}
+                          className="ml-2 text-current underline hover:no-underline"
+                        >
+                          Lier à un concurrent
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {datePost && (
+                    <div className="mt-0.5 text-text-faint">Posté le {datePost}</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
-          <FormField label="Thumbnail URL" hint="Facultatif. Clic droit sur la vidéo → Copier image">
-            <Input
-              value={thumbnail}
-              onChange={(e) => setThumbnail(e.target.value)}
-              placeholder="https://..."
-            />
-          </FormField>
-
-          <div className="grid grid-cols-4 gap-2">
-            <FormField label="Date">
-              <Input type="date" value={datePost} onChange={(e) => setDatePost(e.target.value)} />
-            </FormField>
-            <FormField label="Vues">
-              <Input
-                type="number"
-                value={vues}
-                onChange={(e) =>
-                  setVues(e.target.value === '' ? '' : Number(e.target.value))
-                }
-                placeholder="0"
-              />
-            </FormField>
-            <FormField label="Likes">
-              <Input
-                type="number"
-                value={likes}
-                onChange={(e) =>
-                  setLikes(e.target.value === '' ? '' : Number(e.target.value))
-                }
-                placeholder="0"
-              />
-            </FormField>
-            <FormField label="Comments">
-              <Input
-                type="number"
-                value={comments}
-                onChange={(e) =>
-                  setComments(e.target.value === '' ? '' : Number(e.target.value))
-                }
-                placeholder="0"
-              />
-            </FormField>
-          </div>
-
-          <FormField label="Format" hint="Optionnel — peut être tagué plus tard">
-            <Select value={format} onChange={(e) => setFormat(e.target.value as PostFormat | '')}>
-              <option value="">— Non classé —</option>
-              {POST_FORMATS.map((f) => (
-                <option key={f} value={f}>
-                  {POST_FORMAT_LABELS[f]}
+          {/* Concurrent : seul autre champ obligatoire */}
+          <FormField label="Concurrent" required>
+            <Select
+              value={concurrent === '' ? '' : String(concurrent)}
+              onChange={(e) => setConcurrent(e.target.value ? Number(e.target.value) : '')}
+            >
+              <option value="">— Choisir —</option>
+              {(concurrentsQ.data || []).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nom} ({c.username_ig})
                 </option>
               ))}
             </Select>
           </FormField>
+
+          {/* Avancé : enrichissement manuel optionnel */}
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            className="flex items-center gap-1 text-xs text-text-faint hover:text-text font-medium self-start"
+          >
+            <ChevronDown size={12} className={cn('transition-transform', showAdvanced && 'rotate-180')} />
+            {showAdvanced ? 'Masquer enrichissement' : 'Enrichir maintenant (vues / likes / format…)'}
+          </button>
+
+          {showAdvanced && (
+            <div className="flex flex-col gap-3 pt-2 border-t border-border">
+              <div className="grid grid-cols-3 gap-2">
+                <FormField label="Vues">
+                  <Input
+                    type="number"
+                    value={vues}
+                    onChange={(e) => setVues(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="0"
+                  />
+                </FormField>
+                <FormField label="Likes">
+                  <Input
+                    type="number"
+                    value={likes}
+                    onChange={(e) => setLikes(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="0"
+                  />
+                </FormField>
+                <FormField label="Comments">
+                  <Input
+                    type="number"
+                    value={comments}
+                    onChange={(e) => setComments(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="0"
+                  />
+                </FormField>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <FormField label="Date" hint={datePost ? 'Auto' : 'Optionnel'}>
+                  <Input
+                    type="date"
+                    value={datePost}
+                    onChange={(e) => setDatePost(e.target.value)}
+                  />
+                </FormField>
+                <FormField label="Format">
+                  <Select value={format} onChange={(e) => setFormat(e.target.value as PostFormat | '')}>
+                    <option value="">— Non classé —</option>
+                    {POST_FORMATS.map((f) => (
+                      <option key={f} value={f}>
+                        {POST_FORMAT_LABELS[f]}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+              </div>
+              <FormField label="Thumbnail URL" hint={thumbnail ? 'Auto-récupérée' : 'Coller manuellement'}>
+                <Input
+                  value={thumbnail}
+                  onChange={(e) => setThumbnail(e.target.value)}
+                  placeholder="https://..."
+                />
+              </FormField>
+            </div>
+          )}
         </div>
       </ModalBody>
       <ModalFooter>
+        <div className="flex-1 text-xs text-text-faint flex items-center gap-1">
+          <Wand2 size={11} />
+          Tu peux compléter vues / likes plus tard depuis le drawer
+        </div>
         <Button variant="ghost" onClick={() => onOpenChange(false)}>
           Annuler
         </Button>
         <Button
           variant="primary"
           onClick={handleSubmit}
-          disabled={!canSubmit}
+          disabled={!canSubmit || create.isPending}
           loading={create.isPending}
         >
           Ajouter
         </Button>
       </ModalFooter>
+      {fetchStatus === 'loading' && !thumbnail && (
+        <div className="hidden">
+          <Spinner />
+        </div>
+      )}
     </Modal>
   );
 }

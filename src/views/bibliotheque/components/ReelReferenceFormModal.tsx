@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Mic, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   Modal,
@@ -216,14 +217,18 @@ export function ReelReferenceFormModal({ open, onOpenChange, initial }: Props) {
               />
             </FormField>
 
-            <FormField label="Transcript (depuis ScreenApp ou MCP)">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-xs font-medium text-text-dim">Transcript</label>
+                {form.url.trim() && <TranscribeShortcut url={form.url.trim()} />}
+              </div>
               <Textarea
-                rows={3}
-                placeholder="Texte parlé du Reel..."
+                rows={4}
+                placeholder="Colle ici le transcript généré par Transcript24 ou un autre outil..."
                 value={form.transcript}
                 onChange={(e) => setField('transcript', e.target.value)}
               />
-            </FormField>
+            </div>
           </div>
         )}
 
@@ -239,5 +244,34 @@ export function ReelReferenceFormModal({ open, onOpenChange, initial }: Props) {
         </Button>
       </ModalFooter>
     </Modal>
+  );
+}
+
+// Shortcut pour ouvrir Transcript24 avec l'URL Reel copiée dans le presse-papier.
+// Workflow : click -> URL copiée + Transcript24 ouvert -> coller (Cmd+V) sur le site
+// -> attendre quelques secondes -> copier le transcript -> revenir et coller dans le champ.
+function TranscribeShortcut({ url }: { url: string }) {
+  function handleClick() {
+    navigator.clipboard.writeText(url).catch(() => {
+      // pas grave, l'utilisateur peut coller manuellement
+    });
+    window.open('https://www.transcript24.com/free/instagram-transcript', '_blank', 'noopener,noreferrer');
+    toast.success('URL copiée. Colle-la dans Transcript24, copie le transcript, reviens ici.');
+  }
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className={cn(
+        'inline-flex items-center gap-1 px-2 h-6 rounded-md text-[11px] font-medium',
+        'bg-current text-on-current border border-current shadow-sm',
+        'hover:brightness-95 active:translate-x-px active:translate-y-px active:shadow-none',
+      )}
+      title="Ouvrir Transcript24 avec l'URL en presse-papier"
+    >
+      <Mic size={10} strokeWidth={2} />
+      <span>Transcrire</span>
+      <ExternalLink size={9} />
+    </button>
   );
 }

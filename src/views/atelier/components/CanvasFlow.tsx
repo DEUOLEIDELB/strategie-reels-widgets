@@ -38,15 +38,25 @@ import { useDebouncedCanvasSave } from '../hooks/useDebouncedCanvasSave';
 import { useAtelierView } from '../store';
 
 function snapshotOfRf(nodes: Node[], edges: Edge[]): string {
-  const n: AtelierNode[] = nodes.map((nd) => ({
-    id: nd.id,
-    type: (nd.type as AtelierNodeType) ?? 'avatar',
-    position: { x: Math.round(nd.position.x), y: Math.round(nd.position.y) },
-    data: {
-      briqueId: Number((nd.data as { briqueId?: number })?.briqueId ?? 0),
-      label: String((nd.data as { label?: string })?.label ?? ''),
-    },
-  }));
+  const n: AtelierNode[] = nodes.map((nd) => {
+    const d = nd.data as {
+      briqueId?: number;
+      label?: string;
+      overrides?: Record<string, string>;
+      labelOverride?: string;
+    };
+    return {
+      id: nd.id,
+      type: (nd.type as AtelierNodeType) ?? 'avatar',
+      position: { x: Math.round(nd.position.x), y: Math.round(nd.position.y) },
+      data: {
+        briqueId: Number(d?.briqueId ?? 0),
+        label: String(d?.label ?? ''),
+        overrides: d?.overrides && Object.keys(d.overrides).length > 0 ? d.overrides : undefined,
+        labelOverride: d?.labelOverride,
+      },
+    };
+  });
   const e: AtelierEdge[] = edges.map((ed) => ({ id: ed.id, source: ed.source, target: ed.target }));
   return serializeCanvasState({ nodes: n, edges: e });
 }
@@ -114,7 +124,13 @@ function CanvasInner({ atelier }: Props) {
       id: n.id,
       type: n.type,
       position: n.position,
-      data: { briqueId: n.data.briqueId, type: n.type, label: n.data.label },
+      data: {
+        briqueId: n.data.briqueId,
+        type: n.type,
+        label: n.data.label,
+        overrides: n.data.overrides,
+        labelOverride: n.data.labelOverride,
+      },
     }));
     const initialEdges: Edge[] = state.edges.map((e) => ({
       id: e.id,
@@ -137,43 +153,50 @@ function CanvasInner({ atelier }: Props) {
   const { data: pains } = usePainPoints();
   const { data: reels } = useReels();
 
-  // Hydrate les labels, subtitles et slots depuis Grist (au cas où ils ont changé entre 2 sessions)
+  // Hydrate les labels, subtitles et slots depuis Grist (template) en respectant les overrides locaux.
   useEffect(() => {
     if (!avatars || !angles || !pains || !reels) return;
     setNodes((prev) =>
       prev.map((n) => {
-        const briqueId = Number((n.data as { briqueId?: number })?.briqueId ?? 0);
+        const data = n.data as {
+          briqueId?: number;
+          label?: string;
+          overrides?: Record<string, string>;
+          labelOverride?: string;
+        };
+        const briqueId = Number(data?.briqueId ?? 0);
         const nodeType = n.type as AtelierNodeType | undefined;
-        let label = String((n.data as { label?: string })?.label ?? '');
+        const overrides = data?.overrides ?? {};
+        let label = String(data?.label ?? '');
         let subtitle: string | undefined;
-        let slots = emptySlotsFor(nodeType ?? 'avatar');
+        let slots = emptySlotsFor(nodeType ?? 'avatar', overrides);
         if (nodeType === 'avatar') {
           const a = avatars.find((x) => x.id === briqueId);
           if (a) {
             label = a.prenom || label;
             subtitle = [a.age_range, a.lieu].filter(Boolean).join(' · ');
-            slots = slotsForAvatar(a);
+            slots = slotsForAvatar(a, overrides);
           }
         } else if (nodeType === 'angle') {
           const a = angles.find((x) => x.id === briqueId);
           if (a) {
             label = a.nom || label;
             subtitle = a.cible_primaire;
-            slots = slotsForAngle(a);
+            slots = slotsForAngle(a, overrides);
           }
         } else if (nodeType === 'pain') {
           const p = pains.find((x) => x.id === briqueId);
           if (p) {
             label = p.titre || label;
             subtitle = p.frequence_vecue;
-            slots = slotsForPain(p);
+            slots = slotsForPain(p, overrides);
           }
         } else if (nodeType === 'reel') {
           const r = reels.find((x) => x.id === briqueId);
           if (r) {
             label = r.titre || label;
             subtitle = [r.statut, r.duree_sec ? `${r.duree_sec}s` : null].filter(Boolean).join(' · ');
-            slots = slotsForReel(r);
+            slots = slotsForReel(r, overrides);
           }
         }
         return { ...n, data: { ...n.data, label, subtitle, slots } };
@@ -241,9 +264,7 @@ function CanvasInner({ atelier }: Props) {
   const onNodeDoubleClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
       if (!node.type) return;
-      const briqueId = Number((node.data as { briqueId?: number })?.briqueId ?? 0);
-      if (!briqueId) return;
-      openBriqueDrawer(node.type as AtelierNodeType, briqueId);
+      openBriqueDrawer(node.id);
     },
     [openBriqueDrawer],
   );

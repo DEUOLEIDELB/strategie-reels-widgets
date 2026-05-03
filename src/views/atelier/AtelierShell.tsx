@@ -9,6 +9,7 @@ import { BibliothequeSidebar } from './components/BibliothequeSidebar';
 import { BriquePicker } from './components/BriquePicker';
 import { BriqueDetailDrawer } from './components/BriqueDetailDrawer';
 import { LiveSyncIndicator } from './components/LiveSyncIndicator';
+import { ProjectionPanel } from './components/ProjectionPanel';
 import { CreateAtelierModal } from './components/modals/CreateAtelierModal';
 import { useLiveSync } from './hooks/useLiveSync';
 
@@ -106,6 +107,7 @@ export function AtelierShell() {
         </main>
         <BibliothequeSidebar />
       </div>
+      <ProjectionPanel />
       <BriquePicker />
       <BriqueDetailDrawer />
     </div>

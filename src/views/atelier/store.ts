@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Edge, Node } from '@xyflow/react';
 import type { AtelierNodeType } from '@/shared/lib/types';
 import { autoLayout } from './lib/autoLayout';
-import { buildEdge, buildNode } from './lib/nodeFactory';
+import { buildEdge, buildNode, type BriqueNodeData } from './lib/nodeFactory';
 
 interface PendingAddChild {
   parentNodeId: string;
@@ -34,9 +34,14 @@ interface AtelierViewStore {
   requestAddChild: (parentNodeId: string, childType: AtelierNodeType) => void;
   clearPendingAddChild: () => void;
 
-  openedBriqueDrawer: { type: AtelierNodeType; briqueId: number } | null;
-  openBriqueDrawer: (type: AtelierNodeType, briqueId: number) => void;
+  // Le drawer est ouvert pour UNE INSTANCE précise (nodeId), pas un type+briqueId
+  // — l'édition modifie les overrides de ce node uniquement.
+  openedBriqueDrawer: { nodeId: string } | null;
+  openBriqueDrawer: (nodeId: string) => void;
   closeBriqueDrawer: () => void;
+
+  setNodeOverride: (nodeId: string, slotId: string, value: string | undefined) => void;
+  setNodeLabelOverride: (nodeId: string, label: string | undefined) => void;
 
   // Snapshot du dernier canvas_state pushé vers Grist (ou chargé depuis Grist).
   // Sert à détecter "modif locale en cours" vs "modif distante d'un autre user".
@@ -107,8 +112,36 @@ export const useAtelierView = create<AtelierViewStore>((set, get) => ({
   clearPendingAddChild: () => set({ pendingAddChild: null }),
 
   openedBriqueDrawer: null,
-  openBriqueDrawer: (type, briqueId) => set({ openedBriqueDrawer: { type, briqueId } }),
+  openBriqueDrawer: (nodeId) => set({ openedBriqueDrawer: { nodeId } }),
   closeBriqueDrawer: () => set({ openedBriqueDrawer: null }),
+
+  setNodeOverride: (nodeId, slotId, value) => {
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== nodeId) return n;
+        const data = n.data as BriqueNodeData;
+        const prevOv = data.overrides ?? {};
+        const nextOv = { ...prevOv };
+        if (value === undefined || value === '') delete nextOv[slotId];
+        else nextOv[slotId] = value;
+        return { ...n, data: { ...data, overrides: nextOv } };
+      }),
+    }));
+  },
+
+  setNodeLabelOverride: (nodeId, label) => {
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== nodeId) return n;
+        const data = n.data as BriqueNodeData;
+        const trimmed = label?.trim();
+        return {
+          ...n,
+          data: { ...data, labelOverride: trimmed && trimmed.length > 0 ? trimmed : undefined },
+        };
+      }),
+    }));
+  },
 
   lastSavedSnapshot: null,
   setLastSavedSnapshot: (s) => set({ lastSavedSnapshot: s }),

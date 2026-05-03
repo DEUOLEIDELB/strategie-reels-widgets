@@ -1,32 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import toast from 'react-hot-toast';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ExternalLink, RotateCcw, Beaker } from 'lucide-react';
+import { Drawer, Input, Textarea, Spinner, Badge, Button } from '@/shared/components';
+import { useAvatars, useAngles, usePainPoints, useReels } from '@/shared/hooks/grist';
 import {
-  IdCard,
-  Sparkles,
-  Heart,
-  AlertCircle,
-  Quote,
-  Compass,
-  Zap,
-  Target,
-  Film,
-  Hammer,
-  TrendingUp,
-  ChevronDown,
-} from 'lucide-react';
-import { Drawer, Input, Textarea, Select, Spinner, Badge } from '@/shared/components';
-import {
-  useAvatars,
-  useAngles,
-  usePainPoints,
-  useReels,
-  useUpdateAvatar,
-  useUpdateAngle,
-  useUpdatePainPoint,
-  useUpdateReel,
-} from '@/shared/hooks/grist';
-import {
-  REEL_STATUTS_GRIST,
   type Avatar,
   type Angle,
   type PainPoint,
@@ -36,6 +12,17 @@ import {
 import { nodeStyleOf } from '../lib/nodeStyle';
 import { cn } from '@/shared/lib/utils';
 import { useAtelierView } from '../store';
+import {
+  effectiveValue,
+  isSlotOverridden,
+  slotsForAvatar,
+  slotsForAngle,
+  slotsForPain,
+  slotsForReel,
+  emptySlotsFor,
+  type BriqueSlot,
+  type SlotOverrides,
+} from '../lib/briqueSlots';
 
 const TITLE: Record<AtelierNodeType, string> = {
   avatar: 'Avatar',
@@ -44,588 +31,243 @@ const TITLE: Record<AtelierNodeType, string> = {
   reel: 'Reel',
 };
 
-// =====================================================================
-// Building blocks : SectionCard, FieldRow, InlineX
-// =====================================================================
+const GRIST_DOC_URL = 'https://grist.playwubo.com/o8yNauYWgjtjcnTJyKURyk';
 
-type IconComponent = React.ComponentType<{ size?: string | number; className?: string }>;
-
-interface SectionCardProps {
-  icon: IconComponent;
-  title: string;
-  hint?: string;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
+interface SlotEditorProps {
+  slot: BriqueSlot;
+  onChange: (value: string | undefined) => void;
 }
 
-function SectionCard({ icon: Icon, title, hint, defaultOpen = true, children }: SectionCardProps) {
-  const [open, setOpen] = useState(defaultOpen);
+function SlotEditor({ slot, onChange }: SlotEditorProps) {
+  const [v, setV] = useState(effectiveValue(slot));
+  useEffect(() => setV(effectiveValue(slot)), [slot.templateValue, slot.overrideValue]);
+
+  const overridden = isSlotOverridden(slot);
+
   return (
     <div className="rounded-md border border-border bg-surface-two">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-surface-alt rounded-t-md text-left"
-      >
-        <Icon size={14} className="text-current shrink-0" />
-        <span className="text-[13px] font-semibold text-text flex-1">{title}</span>
-        <ChevronDown
-          size={14}
-          className={cn('text-text-faint transition-transform', open && 'rotate-180')}
-        />
-      </button>
-      {open && (
-        <div className="px-3 pb-3 pt-1 space-y-3 border-t border-border bg-surface">
-          {hint && (
-            <div className="text-[11px] text-text-faint italic leading-relaxed">{hint}</div>
-          )}
-          {children}
-        </div>
-      )}
+      <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border">
+        <span className="text-[12px] font-semibold text-text">{slot.label}</span>
+        {overridden ? (
+          <Badge variant="current" size="xs">local</Badge>
+        ) : (
+          <Badge variant="outline" size="xs">template</Badge>
+        )}
+        <span className="text-[10px] text-text-faint italic ml-auto line-clamp-1">{slot.hint}</span>
+        {overridden && (
+          <button
+            type="button"
+            onClick={() => {
+              setV(slot.templateValue);
+              onChange(undefined);
+            }}
+            className="inline-flex items-center gap-1 text-[10px] text-text-faint hover:text-text"
+            title="Revenir à la valeur du template"
+          >
+            <RotateCcw size={10} />
+            Reset
+          </button>
+        )}
+      </div>
+      <Textarea
+        value={v}
+        onChange={(e) => setV(e.target.value)}
+        onBlur={() => {
+          // Empty -> remove override (back to template)
+          if (v === slot.templateValue || v === '') {
+            if (overridden) onChange(undefined);
+            return;
+          }
+          if (v !== effectiveValue(slot)) onChange(v);
+        }}
+        rows={3}
+        className="rounded-t-none border-0 focus:ring-0"
+        placeholder={slot.templateValue || `Saisis le ${slot.label.toLowerCase()} pour cette instance...`}
+      />
     </div>
   );
 }
 
-interface FieldRowProps {
-  label: string;
-  children: React.ReactNode;
-  hint?: string;
+interface BodyProps {
+  nodeId: string;
+  type: AtelierNodeType;
+  briqueId: number;
+  // Tous les slots (overrides déjà inclus si présents)
+  slots: BriqueSlot[];
 }
 
-function FieldRow({ label, children, hint }: FieldRowProps) {
-  return (
-    <div className="space-y-1">
-      <label className="text-[11px] font-medium text-text-dim uppercase tracking-wide">{label}</label>
-      {children}
-      {hint && <div className="text-[10px] text-text-faint">{hint}</div>}
-    </div>
-  );
-}
-
-interface InlineProps<T> {
-  initial: T;
-  onCommit: (value: T) => void;
-}
-
-function InlineText({ initial, onCommit, placeholder }: InlineProps<string> & { placeholder?: string }) {
+function LabelEditor({ nodeId, defaultLabel, currentOverride }: { nodeId: string; defaultLabel: string; currentOverride: string | undefined }) {
+  const setNodeLabelOverride = useAtelierView((s) => s.setNodeLabelOverride);
+  const initial = currentOverride ?? defaultLabel;
   const [v, setV] = useState(initial);
   useEffect(() => setV(initial), [initial]);
+  const isOverride = currentOverride !== undefined;
   return (
-    <Input
-      value={v ?? ''}
-      onChange={(e) => setV(e.target.value)}
-      onBlur={() => v !== initial && onCommit(v)}
-      placeholder={placeholder}
-      size="sm"
-    />
-  );
-}
-
-function InlineTextarea({ initial, onCommit, rows = 3, placeholder }: InlineProps<string> & { rows?: number; placeholder?: string }) {
-  const [v, setV] = useState(initial);
-  useEffect(() => setV(initial), [initial]);
-  return (
-    <Textarea
-      value={v ?? ''}
-      onChange={(e) => setV(e.target.value)}
-      onBlur={() => v !== initial && onCommit(v)}
-      rows={rows}
-      placeholder={placeholder}
-    />
-  );
-}
-
-function InlineNumber({ initial, onCommit, min, max }: InlineProps<number> & { min?: number; max?: number }) {
-  const [v, setV] = useState<string>(String(initial ?? ''));
-  useEffect(() => setV(String(initial ?? '')), [initial]);
-  return (
-    <Input
-      type="number"
-      value={v}
-      min={min}
-      max={max}
-      onChange={(e) => setV(e.target.value)}
-      onBlur={() => {
-        const n = Number(v);
-        if (Number.isFinite(n) && n !== initial) onCommit(n);
-      }}
-      size="sm"
-    />
-  );
-}
-
-// =====================================================================
-// AVATAR
-// =====================================================================
-
-function AvatarBody({ avatar }: { avatar: Avatar }) {
-  const update = useUpdateAvatar();
-  const commit = useCallback(
-    async (fields: Partial<Avatar>) => {
-      try {
-        await update.mutateAsync({ id: avatar.id, fields });
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'Erreur sauvegarde');
-      }
-    },
-    [avatar.id, update],
-  );
-
-  return (
-    <div className="space-y-2">
-      <SectionCard icon={IdCard} title="Identité">
-        <FieldRow label="Prénom">
-          <InlineText initial={avatar.prenom ?? ''} onCommit={(prenom) => commit({ prenom })} />
-        </FieldRow>
-        <div className="grid grid-cols-2 gap-2">
-          <FieldRow label="Tranche d'âge">
-            <InlineText initial={avatar.age_range ?? ''} onCommit={(age_range) => commit({ age_range })} />
-          </FieldRow>
-          <FieldRow label="Lieu">
-            <InlineText initial={avatar.lieu ?? ''} onCommit={(lieu) => commit({ lieu })} />
-          </FieldRow>
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        icon={Sparkles}
-        title="Vie quotidienne"
-        hint="Le contexte concret. Permet de visualiser un humain, pas une cible démographique."
-      >
-        <div className="grid grid-cols-2 gap-2">
-          <FieldRow label="Situation familiale">
-            <InlineText initial={avatar.situation_familiale ?? ''} onCommit={(situation_familiale) => commit({ situation_familiale })} />
-          </FieldRow>
-          <FieldRow label="Profession">
-            <InlineText initial={avatar.profession ?? ''} onCommit={(profession) => commit({ profession })} />
-          </FieldRow>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <FieldRow label="Revenus foyer">
-            <InlineText initial={avatar.revenus_foyer ?? ''} onCommit={(revenus_foyer) => commit({ revenus_foyer })} />
-          </FieldRow>
-          <FieldRow label="Réseau principal">
-            <InlineText initial={avatar.reseau_principal ?? ''} onCommit={(reseau_principal) => commit({ reseau_principal })} />
-          </FieldRow>
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        icon={Quote}
-        title="Synthèse"
-        hint="Le portrait en quelques phrases : ce qu'il vit, comment il parle, ce qui le tient éveillé la nuit."
-      >
-        <FieldRow label="Description">
-          <InlineTextarea
-            initial={avatar.description_synthese ?? ''}
-            onCommit={(description_synthese) => commit({ description_synthese })}
-            rows={5}
-            placeholder="Sophie, 38 ans, mère de 2 enfants, scrolle Instagram le soir entre culpabilité et fatigue..."
-          />
-        </FieldRow>
-      </SectionCard>
-
-      <SectionCard
-        icon={Heart}
-        title="Déclencheurs d'achat"
-        hint="Ce qui le fait passer à l'action. Reconstitue le moment où il sort la carte bleue."
-      >
-        <InlineTextarea
-          initial={avatar.declencheurs_achat ?? ''}
-          onCommit={(declencheurs_achat) => commit({ declencheurs_achat })}
-          rows={3}
-        />
-      </SectionCard>
-
-      <SectionCard
-        icon={AlertCircle}
-        title="Objections"
-        hint="Ce qui le freine, le fait douter, ce qu'il dira à son conjoint pour ne PAS acheter."
-      >
-        <InlineTextarea
-          initial={avatar.objections ?? ''}
-          onCommit={(objections) => commit({ objections })}
-          rows={3}
-        />
-      </SectionCard>
+    <div className="rounded-md border border-border bg-surface-two">
+      <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border">
+        <span className="text-[12px] font-semibold text-text">Titre de l'instance</span>
+        {isOverride ? (
+          <Badge variant="current" size="xs">local</Badge>
+        ) : (
+          <Badge variant="outline" size="xs">template</Badge>
+        )}
+        <span className="text-[10px] text-text-faint italic ml-auto">Affiché sur la carte du canvas</span>
+        {isOverride && (
+          <button
+            type="button"
+            onClick={() => {
+              setV(defaultLabel);
+              setNodeLabelOverride(nodeId, undefined);
+            }}
+            className="inline-flex items-center gap-1 text-[10px] text-text-faint hover:text-text"
+          >
+            <RotateCcw size={10} />
+            Reset
+          </button>
+        )}
+      </div>
+      <Input
+        value={v}
+        onChange={(e) => setV(e.target.value)}
+        onBlur={() => {
+          if (v === defaultLabel || v === '') {
+            if (isOverride) setNodeLabelOverride(nodeId, undefined);
+            return;
+          }
+          setNodeLabelOverride(nodeId, v);
+        }}
+        className="rounded-t-none border-0 focus:ring-0"
+      />
     </div>
   );
 }
 
-// =====================================================================
-// ANGLE
-// =====================================================================
-
-type AngleScalarFields = Partial<Omit<Angle, 'id' | 'avatars'>>;
-
-function AngleBody({ angle }: { angle: Angle }) {
-  const update = useUpdateAngle();
-  const commit = useCallback(
-    async (fields: AngleScalarFields) => {
-      try {
-        await update.mutateAsync({ id: angle.id, fields });
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'Erreur sauvegarde');
-      }
-    },
-    [angle.id, update],
-  );
+function InstanceBody({ nodeId, type, briqueId, slots }: BodyProps) {
+  const setNodeOverride = useAtelierView((s) => s.setNodeOverride);
+  const node = useAtelierView((s) => s.nodes.find((n) => n.id === nodeId));
+  const labelOverride = (node?.data as { labelOverride?: string } | undefined)?.labelOverride;
+  const baseLabel = String((node?.data as { label?: string } | undefined)?.label ?? '');
 
   return (
-    <div className="space-y-2">
-      <SectionCard icon={Compass} title="Identité de l'angle">
-        <FieldRow label="Nom">
-          <InlineText initial={angle.nom ?? ''} onCommit={(nom) => commit({ nom })} placeholder="Grand frère, Témoin écran..." />
-        </FieldRow>
-        <div className="grid grid-cols-2 gap-2">
-          <FieldRow label="Ton">
-            <InlineText initial={angle.ton ?? ''} onCommit={(ton) => commit({ ton })} placeholder="Énergique, vulnérable..." />
-          </FieldRow>
-          <FieldRow label="Cible primaire">
-            <InlineText initial={angle.cible_primaire ?? ''} onCommit={(cible_primaire) => commit({ cible_primaire })} placeholder="parent / enfant / les deux" />
-          </FieldRow>
+    <div className="space-y-3">
+      <div className="rounded-md bg-current-soft border border-current/30 px-3 py-2 text-[11px] text-current leading-snug flex items-start gap-2">
+        <Beaker size={14} className="shrink-0 mt-0.5" />
+        <div>
+          <div className="font-semibold mb-0.5">Édition locale (laboratoire)</div>
+          Tu modifies cette INSTANCE uniquement. Les autres instances de la même brique et le template Grist restent intacts. Pose la même brique 2 fois pour comparer 2 variantes.
         </div>
-      </SectionCard>
+      </div>
 
-      <SectionCard
-        icon={Sparkles}
-        title="Description"
-        hint="La voix : qui parle, comment, depuis quelle légitimité."
-      >
-        <FieldRow label="Description">
-          <InlineTextarea
-            initial={angle.description ?? ''}
-            onCommit={(description) => commit({ description })}
-            rows={5}
-          />
-        </FieldRow>
-      </SectionCard>
+      <LabelEditor nodeId={nodeId} defaultLabel={baseLabel} currentOverride={labelOverride} />
 
-      <SectionCard
-        icon={Zap}
-        title="Force / Faiblesse"
-        hint="Pourquoi cet angle marche, et quel est son risque caché. Garde l'oeil sur les deux."
-      >
-        <FieldRow label="Force">
-          <InlineTextarea initial={angle.force ?? ''} onCommit={(force) => commit({ force })} rows={3} />
-        </FieldRow>
-        <FieldRow label="Faiblesse">
-          <InlineTextarea initial={angle.faiblesse ?? ''} onCommit={(faiblesse) => commit({ faiblesse })} rows={3} />
-        </FieldRow>
-      </SectionCard>
-
-      <SectionCard
-        icon={Target}
-        title="Quand l'utiliser"
-        hint="Le contexte idéal de cet angle : quel pain, quel signal algo cible, quelle phase."
-      >
-        <InlineTextarea
-          initial={angle.meilleur_pour ?? ''}
-          onCommit={(meilleur_pour) => commit({ meilleur_pour })}
-          rows={3}
+      {slots.map((slot) => (
+        <SlotEditor
+          key={slot.id}
+          slot={slot}
+          onChange={(value) => setNodeOverride(nodeId, slot.id, value)}
         />
-      </SectionCard>
+      ))}
+
+      <div className="pt-2 border-t border-border">
+        <a
+          href={`${GRIST_DOC_URL}/p/2`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-[11px] text-current hover:underline"
+          title={`Modifier le template ${TITLE[type]} #${briqueId} dans Grist (affecte toutes les instances)`}
+        >
+          <ExternalLink size={11} />
+          Modifier le template dans Grist (affecte toutes les instances)
+        </a>
+      </div>
     </div>
   );
 }
-
-// =====================================================================
-// PAIN
-// =====================================================================
-
-type PainScalarFields = Partial<Omit<PainPoint, 'id' | 'avatars' | 'angles'>>;
-
-function PainBody({ pain }: { pain: PainPoint }) {
-  const update = useUpdatePainPoint();
-  const commit = useCallback(
-    async (fields: PainScalarFields) => {
-      try {
-        await update.mutateAsync({ id: pain.id, fields });
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'Erreur sauvegarde');
-      }
-    },
-    [pain.id, update],
-  );
-
-  return (
-    <div className="space-y-2">
-      <SectionCard icon={AlertCircle} title="Le pain en une phrase">
-        <FieldRow label="Titre">
-          <InlineText
-            initial={pain.titre ?? ''}
-            onCommit={(titre) => commit({ titre })}
-            placeholder="La guerre des écrans le soir"
-          />
-        </FieldRow>
-      </SectionCard>
-
-      <SectionCard
-        icon={Quote}
-        title="Description"
-        hint="Pas un concept abstrait : une scène concrète. Qui, où, quand, ce qui se passe."
-      >
-        <InlineTextarea
-          initial={pain.description ?? ''}
-          onCommit={(description) => commit({ description })}
-          rows={5}
-        />
-      </SectionCard>
-
-      <SectionCard
-        icon={Heart}
-        title="Émotion & intensité"
-        hint="Comment ça se vit dans le corps. Ce qui rend ce pain plus puissant que les autres."
-      >
-        <div className="grid grid-cols-2 gap-2">
-          <FieldRow label="Émotion dominante">
-            <InlineText
-              initial={pain.emotion_dominante ?? ''}
-              onCommit={(emotion_dominante) => commit({ emotion_dominante })}
-              placeholder="culpabilité, peur, colère..."
-            />
-          </FieldRow>
-          <FieldRow label="Fréquence vécue">
-            <InlineText
-              initial={pain.frequence_vecue ?? ''}
-              onCommit={(frequence_vecue) => commit({ frequence_vecue })}
-              placeholder="quotidien, hebdo..."
-            />
-          </FieldRow>
-        </div>
-        <FieldRow label="Niveau d'intensité (1-5)">
-          <InlineNumber
-            initial={pain.niveau_intensite ?? 0}
-            onCommit={(niveau_intensite) => commit({ niveau_intensite })}
-            min={1}
-            max={5}
-          />
-        </FieldRow>
-      </SectionCard>
-
-      <SectionCard
-        icon={TrendingUp}
-        title="Preuves & sources"
-        hint="Le chiffre, l'étude, l'article qui rend ce pain indiscutable. Cite la source."
-      >
-        <InlineTextarea
-          initial={pain.chiffre_source ?? ''}
-          onCommit={(chiffre_source) => commit({ chiffre_source })}
-          rows={3}
-          placeholder="4h11/jour de temps d'écran (Rapport Élysée 2024)"
-        />
-      </SectionCard>
-    </div>
-  );
-}
-
-// =====================================================================
-// REEL — l'unité combinatoire la plus structurée
-// =====================================================================
-
-function ReelBody({ reel }: { reel: Reel }) {
-  const update = useUpdateReel();
-  const [statut, setStatut] = useState(reel.statut);
-  useEffect(() => setStatut(reel.statut), [reel.statut]);
-  const commit = useCallback(
-    async (fields: Partial<Reel>) => {
-      try {
-        await update.mutateAsync({ id: reel.id, fields });
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'Erreur sauvegarde');
-      }
-    },
-    [reel.id, update],
-  );
-
-  return (
-    <div className="space-y-2">
-      <SectionCard icon={IdCard} title="Identité">
-        <FieldRow label="Titre de travail">
-          <InlineText initial={reel.titre ?? ''} onCommit={(titre) => commit({ titre })} />
-        </FieldRow>
-        <div className="grid grid-cols-2 gap-2">
-          <FieldRow label="Statut">
-            <Select
-              size="sm"
-              value={statut ?? 'concept'}
-              onChange={(e) => {
-                const v = e.target.value as Reel['statut'];
-                setStatut(v);
-                commit({ statut: v });
-              }}
-            >
-              {REEL_STATUTS_GRIST.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </Select>
-          </FieldRow>
-          <FieldRow label="Durée (sec)">
-            <InlineNumber initial={reel.duree_sec ?? 0} onCommit={(duree_sec) => commit({ duree_sec })} min={0} />
-          </FieldRow>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <FieldRow label="Type">
-            <InlineText
-              initial={reel.type ?? ''}
-              onCommit={(type) => commit({ type })}
-              placeholder="emotion / educatif / storytelling..."
-            />
-          </FieldRow>
-          <FieldRow label="Série">
-            <InlineText initial={reel.serie ?? ''} onCommit={(serie) => commit({ serie })} placeholder="#JournalWubo..." />
-          </FieldRow>
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        icon={Compass}
-        title="Variation créative (angle précis)"
-        hint="Comment cet angle attaque ce pain spécifique. La signature de ce reel : comparaison brutale, métaphore objet, chiffre choc..."
-      >
-        <FieldRow label="Angle précis">
-          <InlineText
-            initial={reel.angle_precis ?? ''}
-            onCommit={(angle_precis) => commit({ angle_precis })}
-            placeholder="comparaison brutale / métaphore quotidien / chiffre miroir..."
-          />
-        </FieldRow>
-      </SectionCard>
-
-      <SectionCard
-        icon={Zap}
-        title="Hook (0-3s)"
-        hint="Les 3 premières secondes décident de la rétention. Verbal, visuel, titre overlay : doivent ouvrir une promesse claire."
-      >
-        <FieldRow label="Hook verbal" hint="Ce qu'on dit à l'oral.">
-          <InlineTextarea initial={reel.hook_verbal ?? ''} onCommit={(hook_verbal) => commit({ hook_verbal })} rows={2} />
-        </FieldRow>
-        <FieldRow label="Hook visuel" hint="Ce que la caméra montre.">
-          <InlineTextarea initial={reel.hook_visuel ?? ''} onCommit={(hook_visuel) => commit({ hook_visuel })} rows={2} />
-        </FieldRow>
-        <FieldRow label="Titre overlay" hint="Le texte gros à l'écran. Doit aimanter le scroll.">
-          <InlineText initial={reel.titre_overlay ?? ''} onCommit={(titre_overlay) => commit({ titre_overlay })} />
-        </FieldRow>
-      </SectionCard>
-
-      <SectionCard
-        icon={Film}
-        title="Body (3-45s)"
-        hint="Le corps du reel. Promesse → tension → payoff. Toutes les 3 sec, quelque chose change (visuel, sonore, info)."
-      >
-        <FieldRow label="Structure du body">
-          <InlineTextarea
-            initial={reel.structure_body ?? ''}
-            onCommit={(structure_body) => commit({ structure_body })}
-            rows={6}
-            placeholder="Plan 1 (3-7s) : ...&#10;Plan 2 (7-12s) : ...&#10;Plan 3 (12-20s) : ..."
-          />
-        </FieldRow>
-      </SectionCard>
-
-      <SectionCard
-        icon={Target}
-        title="CTA"
-        hint="L'action concrète. Type (keyword / save / share / follow / vote) + texte exact à dire ou afficher."
-      >
-        <div className="grid grid-cols-2 gap-2">
-          <FieldRow label="Type">
-            <InlineText
-              initial={reel.cta_type ?? ''}
-              onCommit={(cta_type) => commit({ cta_type })}
-              placeholder="keyword / save / follow..."
-            />
-          </FieldRow>
-          <FieldRow label="Objectif">
-            <InlineText
-              initial={reel.objectif ?? ''}
-              onCommit={(objectif) => commit({ objectif })}
-              placeholder="REACH / ENGAGEMENT / CONVERSION / AUDIENCE"
-            />
-          </FieldRow>
-        </div>
-        <FieldRow label="Texte du CTA">
-          <InlineTextarea initial={reel.cta_texte ?? ''} onCommit={(cta_texte) => commit({ cta_texte })} rows={2} />
-        </FieldRow>
-      </SectionCard>
-
-      <SectionCard
-        icon={Hammer}
-        title="Production"
-        hint="Le concret du tournage : où, avec quoi, avec qui."
-        defaultOpen={false}
-      >
-        <FieldRow label="Lieu">
-          <InlineText initial={reel.production_lieu ?? ''} onCommit={(production_lieu) => commit({ production_lieu })} />
-        </FieldRow>
-        <FieldRow label="Personnes">
-          <InlineText initial={reel.personnes ?? ''} onCommit={(personnes) => commit({ personnes })} />
-        </FieldRow>
-      </SectionCard>
-
-      <SectionCard
-        icon={TrendingUp}
-        title="Prédiction"
-        hint="Avant publication : la métrique principale visée et le risque connu si ça foire."
-        defaultOpen={false}
-      >
-        <FieldRow label="Métrique principale visée">
-          <InlineTextarea
-            initial={reel.prediction_metrique ?? ''}
-            onCommit={(prediction_metrique) => commit({ prediction_metrique })}
-            rows={3}
-            placeholder="save rate > 3% / completion > 45% / DM send rate > 0.5%..."
-          />
-        </FieldRow>
-      </SectionCard>
-    </div>
-  );
-}
-
-// =====================================================================
-// Drawer racine
-// =====================================================================
 
 export function BriqueDetailDrawer() {
   const opened = useAtelierView((s) => s.openedBriqueDrawer);
   const close = useAtelierView((s) => s.closeBriqueDrawer);
+  const node = useAtelierView((s) => (opened ? s.nodes.find((n) => n.id === opened.nodeId) ?? null : null));
 
   const avatars = useAvatars();
   const angles = useAngles();
   const pains = usePainPoints();
   const reels = useReels();
 
-  const resolved = useMemo(() => {
-    if (!opened) return null;
-    const { type, briqueId } = opened;
+  const computed = useMemo(() => {
+    if (!node || !node.type) return null;
+    const type = node.type as AtelierNodeType;
+    const data = node.data as {
+      briqueId?: number;
+      label?: string;
+      overrides?: SlotOverrides;
+      labelOverride?: string;
+    };
+    const briqueId = Number(data?.briqueId ?? 0);
+    const overrides = data?.overrides ?? {};
+    let slots: BriqueSlot[] = emptySlotsFor(type, overrides);
+    let templateLabel = String(data?.label ?? '');
+
     if (type === 'avatar') {
-      const a = avatars.data?.find((x) => x.id === briqueId) ?? null;
-      return a ? { type, briqueId, label: a.prenom || `Avatar #${a.id}`, body: <AvatarBody avatar={a} /> } : null;
+      const a = avatars.data?.find((x) => x.id === briqueId) as Avatar | undefined;
+      if (a) {
+        slots = slotsForAvatar(a, overrides);
+        templateLabel = a.prenom || templateLabel;
+      }
+    } else if (type === 'angle') {
+      const a = angles.data?.find((x) => x.id === briqueId) as Angle | undefined;
+      if (a) {
+        slots = slotsForAngle(a, overrides);
+        templateLabel = a.nom || templateLabel;
+      }
+    } else if (type === 'pain') {
+      const p = pains.data?.find((x) => x.id === briqueId) as PainPoint | undefined;
+      if (p) {
+        slots = slotsForPain(p, overrides);
+        templateLabel = p.titre || templateLabel;
+      }
+    } else if (type === 'reel') {
+      const r = reels.data?.find((x) => x.id === briqueId) as Reel | undefined;
+      if (r) {
+        slots = slotsForReel(r, overrides);
+        templateLabel = r.titre || templateLabel;
+      }
     }
-    if (type === 'angle') {
-      const a = angles.data?.find((x) => x.id === briqueId) ?? null;
-      return a ? { type, briqueId, label: a.nom || `Angle #${a.id}`, body: <AngleBody angle={a} /> } : null;
-    }
-    if (type === 'pain') {
-      const p = pains.data?.find((x) => x.id === briqueId) ?? null;
-      return p ? { type, briqueId, label: p.titre || `Pain #${p.id}`, body: <PainBody pain={p} /> } : null;
-    }
-    const r = reels.data?.find((x) => x.id === briqueId) ?? null;
-    return r ? { type, briqueId, label: r.titre || `Reel #${r.id}`, body: <ReelBody reel={r} /> } : null;
-  }, [opened, avatars.data, angles.data, pains.data, reels.data]);
+
+    return { type, briqueId, slots, templateLabel };
+  }, [node, avatars.data, angles.data, pains.data, reels.data]);
+
+  const handleClose = useCallback(() => close(), [close]);
 
   if (!opened) return <Drawer open={false} onOpenChange={() => undefined}>{null}</Drawer>;
 
   const loading =
-    (opened.type === 'avatar' && avatars.isLoading) ||
-    (opened.type === 'angle' && angles.isLoading) ||
-    (opened.type === 'pain' && pains.isLoading) ||
-    (opened.type === 'reel' && reels.isLoading);
+    !computed &&
+    ((opened && avatars.isLoading) ||
+      angles.isLoading ||
+      pains.isLoading ||
+      reels.isLoading);
 
-  const style = nodeStyleOf(opened.type);
+  if (!computed) {
+    return (
+      <Drawer open onOpenChange={(o) => !o && handleClose()} title="Instance">
+        <div className="px-4 py-12 text-center">
+          {loading ? <Spinner /> : (
+            <div className="text-xs text-text-faint">Cette instance n'est plus sur le canvas.</div>
+          )}
+        </div>
+      </Drawer>
+    );
+  }
+
+  const { type, briqueId, slots, templateLabel } = computed;
+  const data = node?.data as { labelOverride?: string } | undefined;
+  const displayedLabel = data?.labelOverride && data.labelOverride.length > 0 ? data.labelOverride : templateLabel;
+
+  const style = nodeStyleOf(type);
 
   return (
-    <Drawer open onOpenChange={(o) => !o && close()} title={TITLE[opened.type]} width={460}>
+    <Drawer open onOpenChange={(o) => !o && handleClose()} title={TITLE[type]} width={460}>
       <div className="px-4 py-3">
         <div className="flex items-center gap-2 mb-3">
           <span
@@ -637,30 +279,19 @@ export function BriqueDetailDrawer() {
           >
             {style.badgeLabel}
           </span>
-          <span className="text-sm font-semibold text-text truncate">
-            {resolved?.label ?? '...'}
-          </span>
+          <span className="text-sm font-semibold text-text truncate">{displayedLabel}</span>
           <Badge variant="outline" size="xs" className="ml-auto shrink-0">
-            #{opened.briqueId}
+            #{briqueId}
           </Badge>
         </div>
 
-        {loading ? (
-          <div className="py-12 flex items-center justify-center">
-            <Spinner />
-          </div>
-        ) : resolved ? (
-          <>
-            {resolved.body}
-            <div className="mt-4 pt-3 border-t border-border text-[11px] text-text-faint leading-relaxed">
-              Modifs sauvegardées au blur de chaque champ. Visible par les autres utilisateurs en quelques secondes.
-            </div>
-          </>
-        ) : (
-          <div className="py-12 text-center text-xs text-text-faint">
-            Brique introuvable. Elle a peut-être été supprimée côté Grist.
-          </div>
-        )}
+        <InstanceBody nodeId={opened.nodeId} type={type} briqueId={briqueId} slots={slots} />
+
+        <div className="mt-4 flex justify-end">
+          <Button variant="ghost" size="sm" onClick={handleClose}>
+            Fermer
+          </Button>
+        </div>
       </div>
     </Drawer>
   );

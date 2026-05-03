@@ -257,6 +257,11 @@ export interface AtelierNode {
   data: {
     briqueId: number;
     label: string;
+    // Overrides locaux propres à cette instance (ne touchent pas le record Grist).
+    // Indexés par slot.id (hook, body, cta, qui, vit, achete, voix, force, quand, quoi, emotion, preuve).
+    overrides?: Record<string, string>;
+    // Override du titre affiché sur la card. Si non défini, on utilise le label hydraté du template.
+    labelOverride?: string;
   };
 }
 

@@ -6,20 +6,30 @@ import { Tooltip } from '@/shared/components';
 import { nodeStyleOf } from '../../lib/nodeStyle';
 import { nextLevelOf, type BriqueNode } from '../../lib/nodeFactory';
 import { useNodeCallbacks } from './NodeCallbacksContext';
-import type { BriqueSlot } from '../../lib/briqueSlots';
+import { effectiveValue, isSlotFilled, isSlotOverridden, type BriqueSlot } from '../../lib/briqueSlots';
 
-interface SlotPillProps {
+interface SlotRowProps {
   slot: BriqueSlot;
-  filled: boolean;
 }
 
-function SlotPill({ slot, filled }: SlotPillProps) {
-  const preview = filled ? slot.value.slice(0, 80) + (slot.value.length > 80 ? '…' : '') : '(vide)';
+function SlotRow({ slot }: SlotRowProps) {
+  const filled = isSlotFilled(slot);
+  const overridden = isSlotOverridden(slot);
+  const value = effectiveValue(slot);
+  const preview = filled ? value : '(vide)';
+
   return (
     <Tooltip
       content={
-        <div className="max-w-[260px] space-y-1">
-          <div className="text-[10px] uppercase tracking-wide opacity-80">{slot.label}</div>
+        <div className="max-w-[280px] space-y-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wide font-semibold opacity-90">{slot.label}</span>
+            {overridden && (
+              <span className="text-[9px] uppercase font-semibold px-1 rounded-sm bg-current text-on-current">
+                local
+              </span>
+            )}
+          </div>
           <div className="text-[11px] italic opacity-70">{slot.hint}</div>
           <div className="text-[12px] leading-snug whitespace-pre-line break-words">{preview}</div>
         </div>
@@ -27,17 +37,29 @@ function SlotPill({ slot, filled }: SlotPillProps) {
     >
       <div
         className={cn(
-          'flex-1 min-w-0 rounded-sm border px-1.5 py-1 cursor-help',
+          'flex items-start gap-2 rounded-sm border px-2 py-1.5 cursor-help',
           filled
-            ? 'bg-surface border-border-strong text-text'
-            : 'bg-surface-alt border-dashed border-border text-text-muted',
+            ? overridden
+              ? 'bg-current-soft border-current/40'
+              : 'bg-surface border-border-strong'
+            : 'bg-surface-alt border-dashed border-border',
         )}
       >
-        <div className="text-[9px] uppercase tracking-wide font-semibold opacity-70 leading-none mb-0.5">
+        <div
+          className={cn(
+            'shrink-0 text-[9px] uppercase tracking-wide font-semibold leading-none mt-0.5 w-[42px]',
+            overridden ? 'text-current' : 'text-text-faint',
+          )}
+        >
           {slot.label}
         </div>
-        <div className="text-[10px] leading-tight line-clamp-1">
-          {filled ? slot.value : '—'}
+        <div
+          className={cn(
+            'flex-1 min-w-0 text-[11px] leading-snug line-clamp-2 break-words',
+            filled ? 'text-text' : 'text-text-muted italic',
+          )}
+        >
+          {filled ? value : '—'}
         </div>
       </div>
     </Tooltip>
@@ -51,13 +73,15 @@ function BriqueNodeCardImpl({ id, data, selected }: NodeProps<BriqueNode>) {
   const childLabel = child === 'angle' ? 'Angle' : child === 'pain' ? 'Pain' : child === 'reel' ? 'Reel' : null;
 
   const slots = data.slots ?? [];
-  const filledCount = slots.filter((s) => s.value && s.value.length > 0).length;
+  const filledCount = slots.filter(isSlotFilled).length;
+  const overrideCount = slots.filter(isSlotOverridden).length;
   const totalSlots = slots.length || 3;
+  const displayLabel = data.labelOverride && data.labelOverride.length > 0 ? data.labelOverride : data.label;
 
   return (
     <div
       className={cn(
-        'relative w-[260px] rounded-md border bg-surface px-3 py-2.5 shadow-sm transition-shadow',
+        'relative w-[300px] rounded-md border bg-surface px-3 py-2.5 shadow-sm transition-shadow',
         selected ? `${style.borderClass} shadow-md` : 'border-border-strong',
       )}
     >
@@ -74,20 +98,25 @@ function BriqueNodeCardImpl({ id, data, selected }: NodeProps<BriqueNode>) {
         >
           {style.badgeLabel}
         </span>
-        {totalSlots > 0 && (
-          <Tooltip content={`${filledCount} sur ${totalSlots} slots remplis. Double-clic pour éditer.`}>
-            <span
-              className={cn(
-                'text-[10px] tabular-nums px-1 rounded-sm cursor-help',
-                filledCount === totalSlots ? 'bg-success-soft text-success' : 'bg-surface-alt text-text-faint',
-              )}
-            >
-              {filledCount}/{totalSlots}
+        <Tooltip content={`${filledCount} sur ${totalSlots} slots remplis. Double-clic pour éditer cette instance.`}>
+          <span
+            className={cn(
+              'text-[10px] tabular-nums px-1 rounded-sm cursor-help',
+              filledCount === totalSlots ? 'bg-success-soft text-success' : 'bg-surface-alt text-text-faint',
+            )}
+          >
+            {filledCount}/{totalSlots}
+          </span>
+        </Tooltip>
+        {overrideCount > 0 && (
+          <Tooltip content={`${overrideCount} slot${overrideCount > 1 ? 's' : ''} édité${overrideCount > 1 ? 's' : ''} localement, indépendamment du template.`}>
+            <span className="text-[10px] px-1 rounded-sm bg-current-soft text-current cursor-help font-medium">
+              local
             </span>
           </Tooltip>
         )}
         <span className="ml-auto inline-flex items-center gap-0.5">
-          <Tooltip content="Double-clic sur la carte pour ouvrir le drawer d'édition">
+          <Tooltip content="Double-clic sur la carte pour éditer cette instance">
             <Pencil size={10} className="text-text-muted" />
           </Tooltip>
           <button
@@ -106,17 +135,17 @@ function BriqueNodeCardImpl({ id, data, selected }: NodeProps<BriqueNode>) {
 
       {/* Titre + subtitle */}
       <div className="mb-2">
-        <div className="text-sm font-semibold leading-tight text-text line-clamp-1">{data.label}</div>
+        <div className="text-sm font-semibold leading-tight text-text line-clamp-1">{displayLabel}</div>
         {data.subtitle && (
           <div className="mt-0.5 text-[11px] text-text-faint leading-snug line-clamp-1">{data.subtitle}</div>
         )}
       </div>
 
-      {/* Slots : 3 mini-pills compactes */}
+      {/* Slots verticaux : un par ligne pour la lisibilité */}
       {slots.length > 0 && (
-        <div className="flex items-stretch gap-1">
+        <div className="flex flex-col gap-1">
           {slots.map((s) => (
-            <SlotPill key={s.id} slot={s} filled={Boolean(s.value && s.value.length > 0)} />
+            <SlotRow key={s.id} slot={s} />
           ))}
         </div>
       )}

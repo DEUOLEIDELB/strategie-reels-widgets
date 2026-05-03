@@ -1,6 +1,6 @@
 import type { Node, Edge } from '@xyflow/react';
 import type { AtelierNodeType } from '@/shared/lib/types';
-import type { BriqueSlot } from './briqueSlots';
+import type { BriqueSlot, SlotOverrides } from './briqueSlots';
 
 export interface BriqueNodeData extends Record<string, unknown> {
   briqueId: number;
@@ -8,6 +8,11 @@ export interface BriqueNodeData extends Record<string, unknown> {
   label: string;
   subtitle?: string;
   slots?: BriqueSlot[];
+  // Overrides locaux : ne touchent ni le template Grist ni les autres instances.
+  // Indexés par slot.id (hook, body, cta, qui, vit, achete, voix, force, quand, quoi, emotion, preuve).
+  overrides?: SlotOverrides;
+  // Override du label (titre affiché sur la card). Si non set, on utilise le label hydraté du template.
+  labelOverride?: string;
 }
 
 export type BriqueNode = Node<BriqueNodeData>;

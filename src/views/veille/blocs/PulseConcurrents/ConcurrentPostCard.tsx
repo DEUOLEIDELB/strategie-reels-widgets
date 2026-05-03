@@ -103,25 +103,44 @@ export function ConcurrentPostCard({ post, concurrent, onClick, onCapturer }: Pr
           </div>
         )}
 
-        {/* Big vues number bottom-left */}
-        <div className="absolute bottom-2 left-2 right-2 flex items-end justify-between">
-          <div className="text-white">
-            <div className="text-2xl font-bold leading-none drop-shadow-md">
-              {fmtNum(post.vues)}
-            </div>
-            <div className="text-[10px] uppercase tracking-wider opacity-80 mt-0.5">vues</div>
+        {/* Bottom overlay : vues + interactions, seulement si données présentes */}
+        {(post.vues > 0 || post.likes > 0 || post.comments > 0) && (
+          <div className="absolute bottom-2 left-2 right-2 flex items-end justify-between">
+            {post.vues > 0 ? (
+              <div className="text-white">
+                <div className="text-2xl font-bold leading-none drop-shadow-md">
+                  {fmtNum(post.vues)}
+                </div>
+                <div className="text-[10px] uppercase tracking-wider opacity-80 mt-0.5">vues</div>
+              </div>
+            ) : (
+              <div />
+            )}
+            {(post.likes > 0 || post.comments > 0) && (
+              <div className="flex flex-col items-end gap-1 text-white text-[11px] font-medium">
+                {post.likes > 0 && (
+                  <span className="inline-flex items-center gap-0.5 drop-shadow">
+                    <Heart size={11} strokeWidth={2} fill="currentColor" />
+                    {fmtNum(post.likes)}
+                  </span>
+                )}
+                {post.comments > 0 && (
+                  <span className="inline-flex items-center gap-0.5 drop-shadow">
+                    <MessageCircle size={11} strokeWidth={2} />
+                    {fmtNum(post.comments)}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
-          <div className="flex flex-col items-end gap-1 text-white text-[11px] font-medium">
-            <span className="inline-flex items-center gap-0.5 drop-shadow">
-              <Heart size={11} strokeWidth={2} fill="currentColor" />
-              {fmtNum(post.likes)}
-            </span>
-            <span className="inline-flex items-center gap-0.5 drop-shadow">
-              <MessageCircle size={11} strokeWidth={2} />
-              {fmtNum(post.comments)}
-            </span>
+        )}
+
+        {/* Si aucune métrique : badge discret en haut */}
+        {post.vues === 0 && post.likes === 0 && post.comments === 0 && (
+          <div className="absolute top-2 left-2 mt-5 px-1.5 py-0.5 rounded-sm bg-white/80 text-text-faint text-[10px] font-medium pointer-events-none">
+            métriques à saisir
           </div>
-        </div>
+        )}
 
         {/* Plateforme icon top-right pinned */}
         {post.plateforme === 'instagram' && (

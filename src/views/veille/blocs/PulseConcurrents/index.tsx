@@ -39,7 +39,7 @@ export function PulseConcurrents({ onCapturer }: Props) {
   const [filterConcurrent, setFilterConcurrent] = useState<number | ''>('');
   const [filterPlateforme, setFilterPlateforme] = useState<PostPlateforme | ''>('');
   const [filterFormat, setFilterFormat] = useState<PostFormat | ''>('');
-  const [filterFenetre, setFilterFenetre] = useState<'7' | '30' | '90' | 'all'>('30');
+  const [filterFenetre, setFilterFenetre] = useState<'7' | '30' | '90' | 'all'>('all');
   const [filterTop, setFilterTop] = useState<'all' | 'viral'>('all');
 
   const [openId, setOpenId] = useState<number | null>(null);
@@ -92,13 +92,13 @@ export function PulseConcurrents({ onCapturer }: Props) {
   const opened = postsWithScores.find((p) => p.id === openId) || null;
 
   const filterActive =
-    !!filterConcurrent || !!filterPlateforme || !!filterFormat || filterFenetre !== '30' || filterTop !== 'all';
+    !!filterConcurrent || !!filterPlateforme || !!filterFormat || filterFenetre !== 'all' || filterTop !== 'all';
 
   function resetFilters() {
     setFilterConcurrent('');
     setFilterPlateforme('');
     setFilterFormat('');
-    setFilterFenetre('30');
+    setFilterFenetre('all');
     setFilterTop('all');
   }
 
@@ -202,17 +202,27 @@ export function PulseConcurrents({ onCapturer }: Props) {
             ))}
           </div>
         ) : !postsQ.data?.length ? (
-          <EmptyState
-            icon={<Flame size={32} />}
-            title="Aucun post dans le feed"
-            description="Ajoute un post concurrent en collant l'URL d'un Reel Instagram, TikTok ou YouTube."
-            action={
-              <Button variant="primary" size="sm" onClick={() => setAjouterOpen(true)}>
-                <Plus size={12} className="mr-1.5" />
-                Ajouter mon premier post
-              </Button>
-            }
-          />
+          <div className="max-w-md mx-auto py-12 flex flex-col items-center text-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-accent-soft flex items-center justify-center text-accent">
+              <Flame size={28} />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold mb-1">Démarre ta veille concurrentielle</h3>
+              <p className="text-sm text-text-dim leading-relaxed">
+                Colle l'URL d'un Reel Instagram, TikTok ou Short YouTube qui t'intéresse.
+                Le widget récupère <span className="font-semibold">automatiquement</span> la
+                miniature, la date, le créateur. Pour YouTube et TikTok, les vues / likes /
+                comments arrivent aussi.
+              </p>
+            </div>
+            <Button variant="primary" onClick={() => setAjouterOpen(true)}>
+              <Plus size={14} className="mr-1.5" />
+              Ajouter mon premier post
+            </Button>
+            <div className="text-[11px] text-text-faint mt-2 max-w-sm">
+              Astuce : tu scrolles Instagram, tu vois un Reel concurrent qui décolle, tu copies l'URL et tu la colles ici. 30 secondes par capture.
+            </div>
+          </div>
         ) : !filtered.length ? (
           <EmptyState
             icon={<Filter size={28} />}

@@ -10,6 +10,8 @@ import {
   Pencil,
   Check,
   X,
+  Wand2,
+  Loader2,
 } from 'lucide-react';
 import { Drawer, Button, IconButton, Input, Select } from '@/shared/components';
 import {
@@ -27,6 +29,7 @@ import { POST_FORMAT_LABELS, POST_FORMATS } from '@/shared/lib/types';
 import toast from 'react-hot-toast';
 import { cn } from '@/shared/lib/utils';
 import { PostEmbed } from './PostEmbed';
+import { fetchPostStats, statsAvailableFor } from './lib/statsFetcher';
 
 interface Props {
   post: PostConcurrent | null;
@@ -59,6 +62,7 @@ export function ConcurrentPostDrawer({ post, concurrent, open, onOpenChange, onC
   const [draftLikes, setDraftLikes] = useState<number | ''>('');
   const [draftComments, setDraftComments] = useState<number | ''>('');
   const [draftFormat, setDraftFormat] = useState<PostFormat | ''>('');
+  const [autoFetching, setAutoFetching] = useState(false);
 
   if (!post) return null;
 
@@ -102,6 +106,33 @@ export function ConcurrentPostDrawer({ post, concurrent, open, onOpenChange, onC
     });
   }
 
+  async function handleAutoFetchStats() {
+    setAutoFetching(true);
+    try {
+      const stats = await fetchPostStats(post!.url_post);
+      if (!stats || (stats.vues === 0 && stats.likes === 0 && stats.comments === 0)) {
+        toast.error('Stats indisponibles depuis cette URL');
+        return;
+      }
+      update.mutate(
+        {
+          id: post!.id,
+          fields: {
+            vues: stats.vues,
+            likes: stats.likes,
+            comments: stats.comments,
+          },
+        },
+        {
+          onSuccess: () => toast.success(`Stats récupérées (${stats.source})`),
+          onError: (e) => toast.error(`Échec : ${(e as Error).message}`),
+        },
+      );
+    } finally {
+      setAutoFetching(false);
+    }
+  }
+
   function handleCreateReelInspire() {
     const titre = `Inspiré de ${concurrent?.nom || 'concurrent'}`;
     createReel.mutate(
@@ -120,7 +151,8 @@ export function ConcurrentPostDrawer({ post, concurrent, open, onOpenChange, onC
     );
   }
 
-  const ratio = post.vues ? ((post.likes / post.vues) * 100).toFixed(1) : '0';
+  const hasMetrics = (post.vues || 0) > 0 || (post.likes || 0) > 0 || (post.comments || 0) > 0;
+  const ratio = post.vues > 0 ? ((post.likes / post.vues) * 100).toFixed(1) : null;
   const score = post.score_viralite || 0;
 
   return (
@@ -202,36 +234,85 @@ export function ConcurrentPostDrawer({ post, concurrent, open, onOpenChange, onC
                 />
               </div>
             </div>
-          ) : (
+          ) : hasMetrics ? (
             <div className="grid grid-cols-3 relative group">
               <Stat icon={<Eye size={14} />} label="Vues" value={fmtNum(post.vues)} />
               <Stat icon={<Heart size={14} />} label="Likes" value={fmtNum(post.likes)} />
               <Stat icon={<MessageCircle size={14} />} label="Comments" value={fmtNum(post.comments)} />
+              <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                {statsAvailableFor(post.url_post).available && (
+                  <button
+                    onClick={handleAutoFetchStats}
+                    disabled={autoFetching}
+                    className="p-1 rounded-sm text-current hover:bg-current-soft"
+                    title="Auto-récupérer les stats à jour"
+                  >
+                    {autoFetching ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Wand2 size={12} />
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={startEdit}
+                  className="p-1 rounded-sm text-text-faint hover:text-text hover:bg-surface-alt"
+                  title="Éditer les métriques"
+                >
+                  <Pencil size={12} />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1 p-2">
+              {statsAvailableFor(post.url_post).available ? (
+                <button
+                  onClick={handleAutoFetchStats}
+                  disabled={autoFetching}
+                  className="w-full px-3 py-2.5 rounded-md text-xs font-semibold text-on-current bg-current hover:brightness-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {autoFetching ? (
+                    <>
+                      <Loader2 size={12} className="animate-spin" /> Récupération en cours…
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 size={12} /> Auto-récupérer vues / likes / comments
+                    </>
+                  )}
+                </button>
+              ) : (
+                <div className="px-2 py-1 text-[11px] text-text-faint text-center">
+                  {statsAvailableFor(post.url_post).reason}
+                </div>
+              )}
               <button
                 onClick={startEdit}
-                className="absolute top-1 right-1 p-1 rounded-sm opacity-0 group-hover:opacity-100 text-text-faint hover:text-text hover:bg-surface-alt transition-opacity"
-                title="Éditer les métriques"
+                className="w-full px-3 py-1.5 text-xs text-text-dim hover:text-text hover:bg-surface-alt rounded-md flex items-center justify-center gap-2 transition-colors"
               >
                 <Pencil size={12} />
+                Saisir manuellement
               </button>
             </div>
           )}
         </div>
 
         <div className="p-4 flex flex-col gap-4">
-          {/* Meta */}
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <Field icon={<Calendar size={12} />} label="Date" value={fmtDate(post.date_post)} />
-            <Field
-              label="Plateforme"
-              value={post.plateforme ? post.plateforme.toUpperCase() : '—'}
-            />
-            <Field
-              label="Format"
-              value={post.format_detecte ? POST_FORMAT_LABELS[post.format_detecte] : '—'}
-            />
-            <Field label="Engagement rate" value={`${ratio}%`} />
-          </div>
+          {/* Meta : seulement les champs renseignés */}
+          {(post.date_post || post.plateforme || post.format_detecte || ratio !== null) && (
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              {post.date_post && (
+                <Field icon={<Calendar size={12} />} label="Date" value={fmtDate(post.date_post)} />
+              )}
+              {post.plateforme && (
+                <Field label="Plateforme" value={post.plateforme.toUpperCase()} />
+              )}
+              {post.format_detecte && (
+                <Field label="Format" value={POST_FORMAT_LABELS[post.format_detecte]} />
+              )}
+              {ratio !== null && <Field label="Engagement rate" value={`${ratio}%`} />}
+            </div>
+          )}
 
           {/* Caption */}
           {post.caption && (

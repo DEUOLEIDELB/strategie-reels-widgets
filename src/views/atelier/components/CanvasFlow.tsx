@@ -6,7 +6,6 @@ import {
   Controls,
   MiniMap,
   ReactFlow,
-  ReactFlowProvider,
   addEdge,
   applyEdgeChanges,
   applyNodeChanges,
@@ -96,6 +95,32 @@ function CanvasInner({ atelier }: Props) {
           data: { content: n.data.content ?? '', color: n.data.color },
         };
       }
+      if (n.type === 'frame') {
+        return {
+          id: n.id,
+          type: 'frame',
+          position: n.position,
+          width: n.width,
+          height: n.height,
+          data: {
+            content: n.data.content ?? '',
+            color: n.data.color,
+            borderWidth: n.data.borderWidth,
+          },
+        };
+      }
+      if (n.type === 'text') {
+        return {
+          id: n.id,
+          type: 'text',
+          position: n.position,
+          data: {
+            content: n.data.content ?? '',
+            color: n.data.color,
+            fontSize: n.data.fontSize,
+          },
+        };
+      }
       return {
         id: n.id,
         type: n.type,
@@ -132,7 +157,7 @@ function CanvasInner({ atelier }: Props) {
     if (!avatars || !angles || !pains || !reels) return;
     setNodes((prev) =>
       prev.map((n) => {
-        if (n.type === 'note') return n; // les notes n'ont pas de template Grist
+        if (n.type === 'note' || n.type === 'frame' || n.type === 'text') return n; // freeform : pas de template Grist
         const data = n.data as {
           briqueId?: number;
           label?: string;
@@ -239,7 +264,7 @@ function CanvasInner({ atelier }: Props) {
   const onNodeDoubleClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
       if (!node.type) return;
-      if (node.type === 'note') return; // notes : édition en place
+      if (node.type === 'note' || node.type === 'frame' || node.type === 'text') return; // freeform : édition en place
       openBriqueDrawer(node.id);
     },
     [openBriqueDrawer],
@@ -285,8 +310,6 @@ function CanvasInner({ atelier }: Props) {
 
 export function CanvasFlow({ atelier }: Props) {
   return (
-    <ReactFlowProvider>
-      <CanvasInner atelier={atelier} />
-    </ReactFlowProvider>
+    <CanvasInner atelier={atelier} />
   );
 }

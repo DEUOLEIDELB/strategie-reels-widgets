@@ -250,14 +250,17 @@ export interface Sujet {
 
 export type AtelierNodeType = 'avatar' | 'angle' | 'pain' | 'reel';
 
-// Le type 'note' est un sticky-note libre, pas une brique pédagogique. Stocké dans le même
-// canvas_state pour simplicité, mais les notes n'ont ni briqueId ni slots.
-export type CanvasNodeType = AtelierNodeType | 'note';
+// Outils freeform : sticky 'note', 'frame' (rectangle redimensionnable), 'text' (texte libre).
+// Stockés dans le même canvas_state pour simplicité, mais ils n'ont ni briqueId ni slots.
+export type CanvasNodeType = AtelierNodeType | 'note' | 'frame' | 'text';
 
 export interface AtelierNode {
   id: string;
   type: CanvasNodeType;
   position: { x: number; y: number };
+  // Optionnel : taille pour les nodes redimensionnables (frame).
+  width?: number;
+  height?: number;
   data: {
     // Pour les briques (avatar/angle/pain/reel) :
     briqueId?: number;
@@ -269,9 +272,14 @@ export interface AtelierNode {
     // Override du titre affiché sur la card. Si non défini, on utilise le label hydraté du template.
     labelOverride?: string;
 
-    // Pour les sticky notes (type === 'note') :
+    // Pour les sticky notes / texte libre :
     content?: string;
-    color?: string; // hex couleur (par défaut jaune Wubo)
+    // Identifiant de couleur pour notes (ex: 'yellow') ou hex pour frame/text (ex: '#5914D0').
+    color?: string;
+    // Frame : épaisseur de bordure (px), label optionnel
+    borderWidth?: number;
+    // Texte libre : taille de fonte
+    fontSize?: number;
   };
 }
 

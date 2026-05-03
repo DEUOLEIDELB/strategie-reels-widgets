@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Sparkles } from 'lucide-react';
+import { ReactFlowProvider } from '@xyflow/react';
 import { Button, EmptyState, Spinner } from '@/shared/components';
 import { useAteliers } from '@/shared/hooks/grist';
 import { useAppStore } from '@/shared/store';
@@ -14,6 +15,14 @@ import { CreateAtelierModal } from './components/modals/CreateAtelierModal';
 import { useLiveSync } from './hooks/useLiveSync';
 
 export function AtelierShell() {
+  return (
+    <ReactFlowProvider>
+      <AtelierShellInner />
+    </ReactFlowProvider>
+  );
+}
+
+function AtelierShellInner() {
   const ateliers = useAteliers();
   const currentAtelierId = useAppStore((s) => s.currentAtelierId);
   const setCurrentAtelier = useAppStore((s) => s.setCurrentAtelier);

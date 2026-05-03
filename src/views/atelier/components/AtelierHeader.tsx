@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Plus, Copy, Pencil, Trash2, LayoutDashboard, StickyNote } from 'lucide-react';
+import { Plus, Copy, Pencil, Trash2, LayoutDashboard, StickyNote, Square, Type } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useReactFlow } from '@xyflow/react';
 import { Button, Select, ConfirmDialog, Tooltip } from '@/shared/components';
 import { useAteliers, useDeleteAtelier, useDuplicateAtelier } from '@/shared/hooks/grist';
 import { useAppStore } from '@/shared/store';
@@ -20,6 +21,26 @@ export function AtelierHeader({ current }: Props) {
   const del = useDeleteAtelier();
   const relayout = useAtelierView((s) => s.relayout);
   const addNote = useAtelierView((s) => s.addNote);
+  const addFrame = useAtelierView((s) => s.addFrame);
+  const addText = useAtelierView((s) => s.addText);
+  const rf = useReactFlow();
+
+  // Position dans le viewport actuel pour les nouveaux objets freeform
+  const viewportCenterPosition = () => {
+    try {
+      const flowEl = document.querySelector('.react-flow') as HTMLElement | null;
+      const rect = flowEl?.getBoundingClientRect();
+      if (rect) {
+        return rf.screenToFlowPosition({
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 3, // un peu plus haut que le centre, sous le header
+        });
+      }
+    } catch {
+      // fall through
+    }
+    return undefined;
+  };
 
   const [createOpen, setCreateOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -103,16 +124,39 @@ export function AtelierHeader({ current }: Props) {
               </Button>
             </Tooltip>
 
-            <Tooltip content="Ajouter une note libre (annotation)">
+            <Tooltip content="Ajouter une note (sticky)">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  addNote();
-                  toast('Note ajoutée. Clique-la pour écrire.', { icon: '📝' });
+                  addNote(viewportCenterPosition());
                 }}
               >
                 <StickyNote size={12} />
+              </Button>
+            </Tooltip>
+
+            <Tooltip content="Ajouter un cadre (frame redimensionnable)">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  addFrame(viewportCenterPosition());
+                }}
+              >
+                <Square size={12} />
+              </Button>
+            </Tooltip>
+
+            <Tooltip content="Ajouter du texte libre">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  addText(viewportCenterPosition());
+                }}
+              >
+                <Type size={12} />
               </Button>
             </Tooltip>
 

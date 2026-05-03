@@ -21,23 +21,54 @@ function rfToCanvas(nodes: Node[], edges: Edge[]): AtelierCanvasState {
       labelOverride?: string;
       content?: string;
       color?: string;
+      borderWidth?: number;
+      fontSize?: number;
     };
     const type = (n.type as CanvasNodeType) ?? 'avatar';
+    const pos = { x: Math.round(n.position.x), y: Math.round(n.position.y) };
+    const sizeFields =
+      n.width != null && n.height != null ? { width: Math.round(n.width), height: Math.round(n.height) } : {};
+
     if (type === 'note') {
       return {
         id: n.id,
         type,
-        position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
+        position: pos,
         data: {
           content: typeof d?.content === 'string' ? d.content : '',
           color: d?.color,
         },
       };
     }
+    if (type === 'frame') {
+      return {
+        id: n.id,
+        type,
+        position: pos,
+        ...sizeFields,
+        data: {
+          content: typeof d?.content === 'string' ? d.content : '',
+          color: d?.color,
+          borderWidth: d?.borderWidth,
+        },
+      };
+    }
+    if (type === 'text') {
+      return {
+        id: n.id,
+        type,
+        position: pos,
+        data: {
+          content: typeof d?.content === 'string' ? d.content : '',
+          color: d?.color,
+          fontSize: d?.fontSize,
+        },
+      };
+    }
     return {
       id: n.id,
       type,
-      position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
+      position: pos,
       data: {
         briqueId: Number(d?.briqueId ?? 0),
         label: String(d?.label ?? ''),

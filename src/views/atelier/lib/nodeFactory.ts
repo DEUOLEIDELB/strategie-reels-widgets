@@ -88,22 +88,61 @@ export function countInstances(
   }).length;
 }
 
-let noteCounter = 0;
-export function makeNoteId(): string {
-  noteCounter = (noteCounter + 1) % 1_000_000;
-  return `note-${Date.now().toString(36).slice(-4)}${noteCounter.toString(36)}`;
+let freeformCounter = 0;
+function makeFreeformId(prefix: string): string {
+  freeformCounter = (freeformCounter + 1) % 1_000_000;
+  return `${prefix}-${Date.now().toString(36).slice(-4)}${freeformCounter.toString(36)}`;
 }
 
 export function buildNoteNode(content: string, position: { x: number; y: number }, color?: string) {
   return {
-    id: makeNoteId(),
+    id: makeFreeformId('note'),
     type: 'note' as const,
     position,
     data: { content, color },
   };
 }
 
+export function buildFrameNode(
+  position: { x: number; y: number },
+  options: { width?: number; height?: number; color?: string; borderWidth?: number; content?: string } = {},
+) {
+  return {
+    id: makeFreeformId('frame'),
+    type: 'frame' as const,
+    position,
+    width: options.width ?? 320,
+    height: options.height ?? 220,
+    data: {
+      content: options.content ?? '',
+      color: options.color ?? '#5914D0',
+      borderWidth: options.borderWidth ?? 2,
+    },
+  };
+}
+
+export function buildTextNode(
+  position: { x: number; y: number },
+  options: { content?: string; color?: string; fontSize?: number } = {},
+) {
+  return {
+    id: makeFreeformId('text'),
+    type: 'text' as const,
+    position,
+    data: {
+      content: options.content ?? '',
+      color: options.color ?? '#191919',
+      fontSize: options.fontSize ?? 14,
+    },
+  };
+}
+
 export function isBriqueNode(node: Node): boolean {
   const t = node.type;
   return t === 'avatar' || t === 'angle' || t === 'pain' || t === 'reel';
+}
+
+export function isFreeformNode(node: Node): boolean {
+  const t = node.type;
+  return t === 'note' || t === 'frame' || t === 'text';
 }

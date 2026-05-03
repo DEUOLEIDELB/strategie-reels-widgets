@@ -2,7 +2,14 @@ import { create } from 'zustand';
 import type { Edge, Node } from '@xyflow/react';
 import type { AtelierNodeType } from '@/shared/lib/types';
 import { autoLayout } from './lib/autoLayout';
-import { buildEdge, buildNode, buildNoteNode, type BriqueNodeData } from './lib/nodeFactory';
+import {
+  buildEdge,
+  buildFrameNode,
+  buildNode,
+  buildNoteNode,
+  buildTextNode,
+  type BriqueNodeData,
+} from './lib/nodeFactory';
 import { normalizeVariants } from './lib/briqueSlots';
 
 interface PendingAddChild {
@@ -51,9 +58,14 @@ interface AtelierViewStore {
 
   setNodeLabelOverride: (nodeId: string, label: string | undefined) => void;
 
-  // Notes (sticky)
+  // Outils freeform : sticky notes, frames, texte libre
   addNote: (position?: { x: number; y: number }) => string;
+  addFrame: (position?: { x: number; y: number }) => string;
+  addText: (position?: { x: number; y: number }) => string;
   setNoteContent: (nodeId: string, content: string) => void;
+  setNodeColor: (nodeId: string, color: string) => void;
+  setFrameBorderWidth: (nodeId: string, width: number) => void;
+  setTextFontSize: (nodeId: string, size: number) => void;
 
   // Snapshot du dernier canvas_state pushé vers Grist (ou chargé depuis Grist).
   // Sert à détecter "modif locale en cours" vs "modif distante d'un autre user".
@@ -63,6 +75,17 @@ interface AtelierViewStore {
 
 const HORIZONTAL_OFFSET = 280;
 const VERTICAL_SPREAD = 140;
+
+function defaultFreeformPos(nodes: Node[]): { x: number; y: number } {
+  // Quand l'appelant ne fournit pas de position, on évite de spawner sur les nodes existants.
+  if (nodes.length === 0) return { x: 0, y: 0 };
+  const maxX = nodes.reduce((m, n) => Math.max(m, n.position.x), -Infinity);
+  const minY = nodes.reduce((m, n) => Math.min(m, n.position.y), Infinity);
+  return {
+    x: Number.isFinite(maxX) ? maxX + HORIZONTAL_OFFSET + 60 : 0,
+    y: Number.isFinite(minY) ? minY : 0,
+  };
+}
 
 function positionForChild(parent: Node, existingChildren: Node[]): { x: number; y: number } {
   // On empile vers le bas si plusieurs enfants déjà posés sur le même parent.
@@ -236,17 +259,26 @@ export const useAtelierView = create<AtelierViewStore>((set, get) => ({
 
   addNote: (position) => {
     const { nodes } = get();
-    const pos = position ?? { x: 0, y: 0 };
-    if (!position) {
-      // Position par défaut : à côté des nodes existants, en haut à droite
-      const maxX = nodes.reduce((m, n) => Math.max(m, n.position.x), -Infinity);
-      const minY = nodes.reduce((m, n) => Math.min(m, n.position.y), Infinity);
-      pos.x = Number.isFinite(maxX) ? maxX + 320 : 0;
-      pos.y = Number.isFinite(minY) ? minY : 0;
-    }
+    const pos = position ?? defaultFreeformPos(nodes);
     const note = buildNoteNode('', pos, 'yellow');
     set({ nodes: [...nodes, note] });
     return note.id;
+  },
+
+  addFrame: (position) => {
+    const { nodes } = get();
+    const pos = position ?? defaultFreeformPos(nodes);
+    const frame = buildFrameNode(pos);
+    set({ nodes: [...nodes, frame] });
+    return frame.id;
+  },
+
+  addText: (position) => {
+    const { nodes } = get();
+    const pos = position ?? defaultFreeformPos(nodes);
+    const text = buildTextNode(pos);
+    set({ nodes: [...nodes, text] });
+    return text.id;
   },
 
   setNoteContent: (nodeId, content) => {
@@ -255,6 +287,36 @@ export const useAtelierView = create<AtelierViewStore>((set, get) => ({
         if (n.id !== nodeId) return n;
         const data = n.data as { content?: string };
         return { ...n, data: { ...data, content } };
+      }),
+    }));
+  },
+
+  setNodeColor: (nodeId, color) => {
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== nodeId) return n;
+        const data = n.data as { color?: string };
+        return { ...n, data: { ...data, color } };
+      }),
+    }));
+  },
+
+  setFrameBorderWidth: (nodeId, width) => {
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== nodeId) return n;
+        const data = n.data as { borderWidth?: number };
+        return { ...n, data: { ...data, borderWidth: width } };
+      }),
+    }));
+  },
+
+  setTextFontSize: (nodeId, size) => {
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== nodeId) return n;
+        const data = n.data as { fontSize?: number };
+        return { ...n, data: { ...data, fontSize: size } };
       }),
     }));
   },

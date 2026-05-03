@@ -11,7 +11,6 @@ interface Props {
 }
 
 interface FormState {
-  code: string;
   description_plan: string;
   setup_technique: string;
   duree_min_secondes: string;
@@ -19,11 +18,9 @@ interface FormState {
   statut: string;
   url_video: string;
   url_thumbnail: string;
-  reels_qui_utilisent: string;
 }
 
 const EMPTY: FormState = {
-  code: '',
   description_plan: '',
   setup_technique: '',
   duree_min_secondes: '',
@@ -31,13 +28,11 @@ const EMPTY: FormState = {
   statut: 'à_tourner',
   url_video: '',
   url_thumbnail: '',
-  reels_qui_utilisent: '',
 };
 
 function fromBroll(b: BrollWithVideo | null | undefined): FormState {
   if (!b) return EMPTY;
   return {
-    code: b.code ?? '',
     description_plan: b.description_plan ?? '',
     setup_technique: b.setup_technique ?? '',
     duree_min_secondes: b.duree_min_secondes ? String(b.duree_min_secondes) : '',
@@ -45,7 +40,6 @@ function fromBroll(b: BrollWithVideo | null | undefined): FormState {
     statut: b.statut ?? 'à_tourner',
     url_video: b.url_video ?? '',
     url_thumbnail: b.url_thumbnail ?? '',
-    reels_qui_utilisent: b.reels_qui_utilisent ?? '',
   };
 }
 
@@ -76,7 +70,6 @@ export function BrollFormModal({ open, onOpenChange, initial }: Props) {
     }
     setError(null);
     const fields = {
-      code: form.code.trim(),
       description_plan: form.description_plan.trim(),
       setup_technique: form.setup_technique.trim(),
       duree_min_secondes: form.duree_min_secondes ? Number(form.duree_min_secondes) : 0,
@@ -84,7 +77,6 @@ export function BrollFormModal({ open, onOpenChange, initial }: Props) {
       statut: form.statut,
       url_video: form.url_video.trim(),
       url_thumbnail: form.url_thumbnail.trim(),
-      reels_qui_utilisent: form.reels_qui_utilisent.trim(),
     };
     try {
       if (isEdit && initial) {
@@ -106,28 +98,10 @@ export function BrollFormModal({ open, onOpenChange, initial }: Props) {
     <Modal
       open={open}
       onOpenChange={onOpenChange}
-      title={isEdit ? `Modifier le B-roll ${initial?.code || ''}` : 'Nouveau B-roll'}
+      title={isEdit ? 'Modifier le B-roll' : 'Nouveau B-roll'}
       size="md"
     >
       <ModalBody>
-        <div className="grid grid-cols-2 gap-3">
-          <FormField label="Code">
-            <Input
-              size="sm"
-              placeholder="B17"
-              value={form.code}
-              onChange={(e) => setField('code', e.target.value)}
-            />
-          </FormField>
-          <FormField label="Statut">
-            <Select size="sm" value={form.statut} onChange={(e) => setField('statut', e.target.value)}>
-              <option value="à_tourner">à tourner</option>
-              <option value="tourné">tourné</option>
-              <option value="monté">monté</option>
-            </Select>
-          </FormField>
-        </div>
-
         <FormField label="Description du plan" required>
           <Textarea
             rows={3}
@@ -137,24 +111,13 @@ export function BrollFormModal({ open, onOpenChange, initial }: Props) {
           />
         </FormField>
 
-        <FormField label="Setup technique">
-          <Input
-            size="sm"
-            placeholder="Téléphone + trépied bras horizontal"
-            value={form.setup_technique}
-            onChange={(e) => setField('setup_technique', e.target.value)}
-          />
-        </FormField>
-
         <div className="grid grid-cols-2 gap-3">
-          <FormField label="Durée min (sec)">
-            <Input
-              size="sm"
-              type="number"
-              min={0}
-              value={form.duree_min_secondes}
-              onChange={(e) => setField('duree_min_secondes', e.target.value)}
-            />
+          <FormField label="Statut">
+            <Select size="sm" value={form.statut} onChange={(e) => setField('statut', e.target.value)}>
+              <option value="à_tourner">à tourner</option>
+              <option value="tourné">tourné</option>
+              <option value="monté">monté</option>
+            </Select>
           </FormField>
           <FormField label="Priorité">
             <Select size="sm" value={form.priorite} onChange={(e) => setField('priorite', e.target.value)}>
@@ -166,10 +129,29 @@ export function BrollFormModal({ open, onOpenChange, initial }: Props) {
           </FormField>
         </div>
 
-        <FormField label="URL vidéo">
+        <FormField label="Setup technique">
           <Input
             size="sm"
-            placeholder="https://drive.google.com/file/d/... ou .mp4 direct"
+            placeholder="Téléphone + trépied bras horizontal"
+            value={form.setup_technique}
+            onChange={(e) => setField('setup_technique', e.target.value)}
+          />
+        </FormField>
+
+        <FormField label="Durée min (secondes)">
+          <Input
+            size="sm"
+            type="number"
+            min={0}
+            value={form.duree_min_secondes}
+            onChange={(e) => setField('duree_min_secondes', e.target.value)}
+          />
+        </FormField>
+
+        <FormField label="URL vidéo (Drive, YouTube, mp4...)">
+          <Input
+            size="sm"
+            placeholder="https://..."
             value={form.url_video}
             onChange={(e) => setField('url_video', e.target.value)}
           />
@@ -181,15 +163,6 @@ export function BrollFormModal({ open, onOpenChange, initial }: Props) {
             placeholder="https://... image preview"
             value={form.url_thumbnail}
             onChange={(e) => setField('url_thumbnail', e.target.value)}
-          />
-        </FormField>
-
-        <FormField label="Reels qui utilisent ce broll">
-          <Input
-            size="sm"
-            placeholder="R12, R47, R88"
-            value={form.reels_qui_utilisent}
-            onChange={(e) => setField('reels_qui_utilisent', e.target.value)}
           />
         </FormField>
 

@@ -52,6 +52,16 @@ export function useDeleteBroll() {
   });
 }
 
+// Insertion batch pour amorcer une table vide.
+export function useBatchCreateBrolls() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (records: BrollInput[]) =>
+      addRecords('Broll', records as Record<string, unknown>[]),
+    onSuccess: () => qc.invalidateQueries({ queryKey: QK_BROLL }),
+  });
+}
+
 export function useCreateSession() {
   const qc = useQueryClient();
   return useMutation({

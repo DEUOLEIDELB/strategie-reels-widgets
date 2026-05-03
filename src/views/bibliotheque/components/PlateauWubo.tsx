@@ -21,7 +21,8 @@ import { SetupCard } from './SetupCard';
 import { BrollFormModal } from './BrollFormModal';
 import { SessionFormModal } from './SessionFormModal';
 import { SETUPS } from '../lib/setups';
-import { useDeleteBroll, useDeleteSession } from '../lib/mutations';
+import { EXEMPLES_BROLLS } from '../lib/exemplesBrolls';
+import { useDeleteBroll, useDeleteSession, useBatchCreateBrolls } from '../lib/mutations';
 import type { BrollWithVideo } from '../types';
 
 type SubTab = 'brolls' | 'sessions' | 'setups';
@@ -48,6 +49,16 @@ export function PlateauWubo() {
 
   const deleteBroll = useDeleteBroll();
   const deleteSession = useDeleteSession();
+  const batchCreateBrolls = useBatchCreateBrolls();
+
+  async function loadExemples() {
+    try {
+      await batchCreateBrolls.mutateAsync(EXEMPLES_BROLLS);
+      toast.success(`${EXEMPLES_BROLLS.length} B-rolls Wubo ajoutés`);
+    } catch (e) {
+      toast.error(`Échec : ${(e as Error).message}`);
+    }
+  }
 
   const filteredBrolls = useMemo(() => {
     const q = debounced.trim().toLowerCase();
@@ -205,6 +216,8 @@ export function PlateauWubo() {
               hasSearch={Boolean(debounced || orphelinsOnly)}
               totalCount={brollsTyped.length}
               onCreate={handleNewBroll}
+              onLoadExemples={loadExemples}
+              loadingExemples={batchCreateBrolls.isPending}
             />
           ) : (
             <Grid>
@@ -300,22 +313,32 @@ function EmptyBrolls({
   hasSearch,
   totalCount,
   onCreate,
+  onLoadExemples,
+  loadingExemples,
 }: {
   hasSearch: boolean;
   totalCount: number;
   onCreate: () => void;
+  onLoadExemples: () => void;
+  loadingExemples: boolean;
 }) {
   if (totalCount === 0) {
     return (
       <EmptyState
         icon={<Film size={24} />}
         title="Aucun B-roll enregistré"
-        description="Ajoute tes plans réutilisables : code, description, durée, statut, et une URL vidéo pour visualiser."
+        description="Charge 8 B-rolls Wubo concrets pour démarrer (LED slow-mo, mains, réactions, atelier...) ou crée ton premier."
         action={
-          <Button variant="primary" size="sm" onClick={onCreate}>
-            <Plus size={12} className="mr-1" />
-            Créer le premier B-roll
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="primary" size="sm" onClick={onLoadExemples} disabled={loadingExemples}>
+              <Film size={12} className="mr-1" />
+              {loadingExemples ? 'Chargement...' : 'Charger 8 exemples Wubo'}
+            </Button>
+            <Button variant="secondary" size="sm" onClick={onCreate}>
+              <Plus size={12} className="mr-1" />
+              Créer le premier
+            </Button>
+          </div>
         }
       />
     );

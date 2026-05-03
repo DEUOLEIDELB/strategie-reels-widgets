@@ -1,14 +1,16 @@
-import { Palette, Type, Settings, ListChecks, Sparkles, Film, Copy, Check, RotateCcw } from 'lucide-react';
+import { Palette, Type, Settings, ListChecks, Sparkles, Package, Copy, Check, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Card, CardBody, Badge, Button } from '@/shared/components';
 import { cn, textOnHex } from '@/shared/lib/utils';
 import { IDENTITE } from '../lib/identite';
 import { CHECKLIST_PRE_TOURNAGE, CHECKLIST_POST_TOURNAGE } from '../lib/checklists';
-import { CHEAT_HOOKS, CHEAT_FORMATS } from '../lib/cheatSheet';
+import { PATTERNS } from '../lib/patterns';
+import { ASSETS_TO_CREATE } from '../lib/assetsToCreate';
 import { useChecklist } from '../lib/useChecklist';
 
-// Manuel Wubo : interactif. Couleurs cliquables pour copier le hex,
-// checklists persistantes localStorage (état conservé entre sessions).
+// Manuel Wubo : 3 blocs, chaque bloc actionnable.
+// Suppression cheat sheets hooks/formats (doublons avec l'Atelier).
+// Ajout patterns visuels 2026 + assets de marque à produire.
 export function ManuelWubo() {
   return (
     <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
@@ -20,7 +22,7 @@ export function ManuelWubo() {
             ))}
           </div>
         </Section>
-        <Section label="Polices" icon={Type}>
+        <Section label="Polices Wubo" icon={Type}>
           <ul className="flex flex-col gap-1">
             {IDENTITE.fonts.map((f) => (
               <li key={f.nom} className="text-[11px] text-text-dim">
@@ -60,43 +62,40 @@ export function ManuelWubo() {
         </Section>
       </Bloc>
 
-      <Bloc title="Checklists" icon={ListChecks}>
+      <Bloc title="Checklists tournage" icon={ListChecks}>
         <ChecklistSection
           storageKey="wubo_checklist_pre_tournage"
-          label="Avant tournage"
+          label="Avant tournage (4 vrais pièges)"
           items={CHECKLIST_PRE_TOURNAGE}
         />
         <ChecklistSection
           storageKey="wubo_checklist_post_tournage"
-          label="Après tournage / montage"
+          label="Après tournage (4 critiques)"
           items={CHECKLIST_POST_TOURNAGE}
         />
       </Bloc>
 
-      <Bloc title="Cheat sheet hooks" icon={Sparkles}>
-        <ul className="flex flex-col gap-1.5">
-          {CHEAT_HOOKS.map((h) => (
-            <li key={h.nom} className="text-[11px] flex flex-col gap-0.5">
-              <Badge variant="default" size="xs" className="self-start">
-                {h.nom}
-              </Badge>
-              <span className="text-text-dim italic leading-snug">{h.exemple}</span>
+      <Bloc title="Patterns visuels qui marchent (2026)" icon={Sparkles}>
+        <ul className="flex flex-col gap-2">
+          {PATTERNS.map((p) => (
+            <li key={p.id} className="flex flex-col gap-0.5 pb-2 border-b border-border last:border-0 last:pb-0">
+              <div className="flex items-center gap-1.5">
+                <Badge variant="current" size="xs">
+                  {p.nom}
+                </Badge>
+              </div>
+              <p className="text-[11px] text-text-dim leading-snug">{p.description}</p>
+              <p className="text-[10px] text-text-faint italic">→ {p.quand_utiliser}</p>
             </li>
           ))}
         </ul>
       </Bloc>
 
-      <Bloc title="Cheat sheet formats" icon={Film}>
-        <ul className="flex flex-col gap-1.5">
-          {CHEAT_FORMATS.map((f) => (
-            <li key={f.nom} className="text-[11px] flex flex-col gap-0.5">
-              <Badge variant="outline" size="xs" className="self-start">
-                {f.nom}
-              </Badge>
-              <span className="text-text-dim leading-snug">{f.description_courte}</span>
-            </li>
-          ))}
-        </ul>
+      <Bloc title="Assets de marque à créer" icon={Package}>
+        <p className="text-[11px] text-text-faint italic mb-1">
+          À produire une fois, à réutiliser dans tous les Reels. Coche au fur et à mesure.
+        </p>
+        <AssetsChecklist />
       </Bloc>
     </div>
   );
@@ -202,6 +201,82 @@ function ChecklistSection({
                       {c.detail}
                     </span>
                   )}
+                </div>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function AssetsChecklist() {
+  const ids = ASSETS_TO_CREATE.map((a) => a.id);
+  const { checked, toggle, reset, doneCount, total, allDone } = useChecklist(
+    'wubo_brand_assets',
+    ids,
+  );
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] uppercase tracking-wide text-text-faint flex-1">
+          {total} assets de signature
+        </span>
+        <span
+          className={cn(
+            'text-[10px] tabular-nums',
+            allDone ? 'text-success font-semibold' : 'text-text-faint',
+          )}
+        >
+          {doneCount} / {total}
+        </span>
+        {doneCount > 0 && (
+          <Button variant="ghost" size="sm" onClick={reset}>
+            <RotateCcw size={11} className="mr-1" />
+            Reset
+          </Button>
+        )}
+      </div>
+      <ul className="flex flex-col gap-1">
+        {ASSETS_TO_CREATE.map((a) => {
+          const isChecked = checked.has(a.id);
+          return (
+            <li key={a.id}>
+              <button
+                type="button"
+                onClick={() => toggle(a.id)}
+                className={cn(
+                  'w-full flex items-start gap-2 px-1.5 py-1.5 rounded-sm text-left',
+                  'hover:bg-surface-alt transition-colors',
+                  isChecked && 'opacity-60',
+                )}
+              >
+                <span
+                  className={cn(
+                    'inline-flex items-center justify-center w-4 h-4 mt-0.5 rounded-sm border shrink-0',
+                    isChecked
+                      ? 'bg-success border-success text-on-success'
+                      : 'bg-surface border-border-strong',
+                  )}
+                  aria-checked={isChecked}
+                  role="checkbox"
+                >
+                  {isChecked && <Check size={10} strokeWidth={3} />}
+                </span>
+                <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                  <span
+                    className={cn(
+                      'text-[11px] font-medium text-text leading-snug',
+                      isChecked && 'line-through',
+                    )}
+                  >
+                    {a.nom}
+                  </span>
+                  <span className="text-[10px] text-text-dim leading-snug">{a.description}</span>
+                  <Badge variant="outline" size="xs" className="self-start">
+                    {a.format}
+                  </Badge>
                 </div>
               </button>
             </li>

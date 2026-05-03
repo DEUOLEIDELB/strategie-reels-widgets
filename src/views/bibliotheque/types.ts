@@ -46,12 +46,3 @@ export interface IdentiteVisuelle {
   regles_overlay: string[];
 }
 
-export interface CheatHook {
-  nom: string;
-  exemple: string;
-}
-
-export interface CheatFormat {
-  nom: string;
-  description_courte: string;
-}

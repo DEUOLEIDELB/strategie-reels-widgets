@@ -1,18 +1,22 @@
 import { useState } from 'react';
 import { Play, ExternalLink, Image as ImageIcon } from 'lucide-react';
+import { cn } from '@/shared/lib/utils';
 import { detectVideo } from '../lib/videoEmbed';
 
 interface Props {
   url?: string;
   thumbnail?: string;
   alt: string;
+  forceVertical?: boolean;
 }
 
-// Frame vidéo : embed inline si embeddable, sinon thumbnail + bouton "Ouvrir".
-// Sans aucune URL : placeholder neutre.
-export function VideoPreview({ url, thumbnail, alt }: Props) {
+// Frame vidéo : embed inline si embeddable (mp4 / YouTube / Vimeo / Drive / Instagram / TikTok).
+// Aspect 9:16 pour Reels et Shorts, 16:9 pour le reste. Sans URL : placeholder neutre.
+export function VideoPreview({ url, thumbnail, alt, forceVertical }: Props) {
   const [playing, setPlaying] = useState(false);
   const video = detectVideo(url);
+
+  const aspect = forceVertical || video?.aspect === 'vertical' ? 'aspect-[9/16]' : 'aspect-video';
 
   if (!video) {
     if (thumbnail) {
@@ -21,33 +25,52 @@ export function VideoPreview({ url, thumbnail, alt }: Props) {
           href={thumbnail}
           target="_blank"
           rel="noopener noreferrer"
-          className="block aspect-video rounded-sm overflow-hidden bg-surface-alt border border-border"
+          className={cn('block rounded-sm overflow-hidden bg-surface-alt border border-border', aspect)}
         >
           <img src={thumbnail} alt={alt} className="w-full h-full object-cover" />
         </a>
       );
     }
     return (
-      <div className="aspect-video rounded-sm bg-surface-alt border border-border flex items-center justify-center text-text-faint">
+      <div className={cn('rounded-sm bg-surface-alt border border-border flex items-center justify-center text-text-faint', aspect)}>
         <ImageIcon size={20} strokeWidth={1.5} />
       </div>
     );
   }
 
+  // mp4 direct
   if (video.kind === 'mp4') {
     return (
-      <div className="aspect-video rounded-sm overflow-hidden bg-text border border-border">
+      <div className={cn('rounded-sm overflow-hidden bg-text border border-border', aspect)}>
         <video src={video.directUrl} controls preload="metadata" className="w-full h-full" />
       </div>
     );
   }
 
+  // Instagram et TikTok : embed direct, autoplay impossible côté client. Iframe immédiate.
+  if ((video.kind === 'instagram' || video.kind === 'tiktok') && video.embedUrl) {
+    return (
+      <div className={cn('rounded-sm overflow-hidden bg-surface-alt border border-border', aspect)}>
+        <iframe
+          src={video.embedUrl}
+          title={alt}
+          allow="encrypted-media; picture-in-picture"
+          allowFullScreen
+          loading="lazy"
+          scrolling="no"
+          className="w-full h-full border-0"
+        />
+      </div>
+    );
+  }
+
+  // YouTube et Vimeo et Drive : preview avec play button, embed à la demande
   if (video.embeddable && video.embedUrl) {
     if (playing) {
       return (
-        <div className="aspect-video rounded-sm overflow-hidden bg-text border border-border">
+        <div className={cn('rounded-sm overflow-hidden bg-text border border-border', aspect)}>
           <iframe
-            src={`${video.embedUrl}?autoplay=1`}
+            src={`${video.embedUrl}${video.embedUrl.includes('?') ? '&' : '?'}autoplay=1`}
             title={alt}
             allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
@@ -60,7 +83,10 @@ export function VideoPreview({ url, thumbnail, alt }: Props) {
       <button
         type="button"
         onClick={() => setPlaying(true)}
-        className="group relative aspect-video rounded-sm overflow-hidden bg-surface-alt border border-border hover:border-border-strong transition-colors w-full"
+        className={cn(
+          'group relative rounded-sm overflow-hidden bg-surface-alt border border-border hover:border-border-strong transition-colors w-full',
+          aspect,
+        )}
         aria-label={`Lire ${alt}`}
       >
         {thumbnail ? (
@@ -79,13 +105,16 @@ export function VideoPreview({ url, thumbnail, alt }: Props) {
     );
   }
 
-  // Pas embeddable, juste un lien
+  // Pas embeddable (TikTok short URLs vm.tiktok.com, autres URLs non reconnues)
   return (
     <a
       href={video.directUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="aspect-video rounded-sm overflow-hidden bg-surface-alt border border-border flex flex-col items-center justify-center gap-1 hover:border-border-strong transition-colors text-text-dim"
+      className={cn(
+        'rounded-sm overflow-hidden bg-surface-alt border border-border flex flex-col items-center justify-center gap-1 hover:border-border-strong transition-colors text-text-dim',
+        aspect,
+      )}
     >
       <ExternalLink size={20} strokeWidth={1.5} />
       <span className="text-[11px]">Ouvrir la vidéo</span>

@@ -27,6 +27,7 @@ export interface TechniqueMontage {
   description: string;
   comment_reconnaitre: string;
   exemple_wubo: string;
+  url_exemple?: string;
 }
 
 export function useReelsReferences() {

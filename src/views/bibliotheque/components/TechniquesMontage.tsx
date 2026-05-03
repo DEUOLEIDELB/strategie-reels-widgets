@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Search, X, Scissors, Wand2, Zap, Gauge, Layers } from 'lucide-react';
+import { Search, X, Scissors, Wand2, Zap, Gauge, Layers, Play } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useDebounce } from '@/shared/hooks/ui';
-import { Input, Skeleton, EmptyState, Card, CardBody, Badge } from '@/shared/components';
+import { Input, Skeleton, EmptyState, Card, CardBody, Badge, Button, Modal, ModalBody } from '@/shared/components';
 import { cn } from '@/shared/lib/utils';
 import { useTechniquesMontage, type TechniqueMontage } from '../lib/queries';
 import { TYPE_TONES, type PatternType } from '../lib/patternsLabels';
+import { VideoPreview } from './VideoPreview';
 
 const TYPE_ICONS: Record<PatternType, LucideIcon> = {
   cut: Scissors,
@@ -160,31 +161,59 @@ export function TechniquesMontage() {
 
 function TechniqueCard({ tech }: { tech: TechniqueMontage }) {
   const tone = TYPE_TONES[(tech.type as PatternType) || 'cut'] || 'default';
+  const [showExample, setShowExample] = useState(false);
+  const hasExample = Boolean(tech.url_exemple);
+
   return (
-    <Card>
-      <CardBody className="flex flex-col gap-1.5">
-        <div className="flex items-center gap-2">
-          <h4 className="text-sm font-semibold text-text">{tech.nom}</h4>
-          <Badge variant={tone} size="xs">
-            {tech.type}
-          </Badge>
-        </div>
-        {tech.description && (
-          <p className="text-xs text-text-dim leading-snug">{tech.description}</p>
-        )}
-        {tech.comment_reconnaitre && (
-          <p className="text-[11px] text-text-faint leading-snug">
-            <span className="font-semibold">Reconnaître : </span>
-            {tech.comment_reconnaitre}
-          </p>
-        )}
-        {tech.exemple_wubo && (
-          <p className="text-[11px] leading-snug text-text-dim border-l-2 border-current pl-2 mt-1">
-            <span className="font-semibold text-current">Wubo : </span>
-            {tech.exemple_wubo}
-          </p>
-        )}
-      </CardBody>
-    </Card>
+    <>
+      <Card>
+        <CardBody className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <h4 className="text-sm font-semibold text-text flex-1">{tech.nom}</h4>
+            <Badge variant={tone} size="xs">
+              {tech.type}
+            </Badge>
+            {hasExample && (
+              <Button variant="primary" size="sm" onClick={() => setShowExample(true)}>
+                <Play size={11} className="mr-1" />
+                Voir
+              </Button>
+            )}
+          </div>
+          {tech.description && (
+            <p className="text-xs text-text-dim leading-snug">{tech.description}</p>
+          )}
+          {tech.comment_reconnaitre && (
+            <p className="text-[11px] text-text-faint leading-snug">
+              <span className="font-semibold">Reconnaître : </span>
+              {tech.comment_reconnaitre}
+            </p>
+          )}
+          {tech.exemple_wubo && (
+            <p className="text-[11px] leading-snug text-text-dim border-l-2 border-current pl-2 mt-1">
+              <span className="font-semibold text-current">Wubo : </span>
+              {tech.exemple_wubo}
+            </p>
+          )}
+        </CardBody>
+      </Card>
+
+      {hasExample && (
+        <Modal
+          open={showExample}
+          onOpenChange={setShowExample}
+          title={`${tech.nom} : exemple`}
+          size="sm"
+        >
+          <ModalBody>
+            <div className="flex justify-center">
+              <div className="w-full max-w-[280px]">
+                <VideoPreview url={tech.url_exemple} alt={tech.nom} />
+              </div>
+            </div>
+          </ModalBody>
+        </Modal>
+      )}
+    </>
   );
 }

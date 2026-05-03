@@ -11,6 +11,7 @@ import {
   type BriqueNodeData,
 } from './lib/nodeFactory';
 import { normalizeVariants } from './lib/briqueSlots';
+import type { BriquesDataSnapshot } from './lib/computeSlots';
 
 interface PendingAddChild {
   parentNodeId: string;
@@ -36,7 +37,7 @@ interface AtelierViewStore {
     options: AddBriqueOptions,
   ) => string;
   removeNode: (nodeId: string) => void;
-  relayout: () => void;
+  relayout: (briques?: BriquesDataSnapshot) => void;
 
   pendingAddChild: PendingAddChild | null;
   requestAddChild: (parentNodeId: string, childType: AtelierNodeType) => void;
@@ -59,6 +60,11 @@ interface AtelierViewStore {
   setNodeLabelOverride: (nodeId: string, label: string | undefined) => void;
 
   // Outils freeform : sticky notes, frames, texte libre
+  // Mode "outil sélectionné" : click sur le bouton = activeTool, click sur canvas = place
+  activeTool: 'note' | 'frame' | 'text' | null;
+  setActiveTool: (tool: 'note' | 'frame' | 'text' | null) => void;
+  toggleActiveTool: (tool: 'note' | 'frame' | 'text') => void;
+
   addNote: (position?: { x: number; y: number }) => string;
   addFrame: (position?: { x: number; y: number }) => string;
   addText: (position?: { x: number; y: number }) => string;
@@ -138,8 +144,8 @@ export const useAtelierView = create<AtelierViewStore>((set, get) => ({
     }));
   },
 
-  relayout: () => {
-    set((s) => ({ nodes: autoLayout(s.nodes, s.edges) }));
+  relayout: (briques) => {
+    set((s) => ({ nodes: autoLayout(s.nodes, s.edges, briques) }));
   },
 
   pendingAddChild: null,
@@ -256,6 +262,10 @@ export const useAtelierView = create<AtelierViewStore>((set, get) => ({
       }),
     }));
   },
+
+  activeTool: null,
+  setActiveTool: (tool) => set({ activeTool: tool }),
+  toggleActiveTool: (tool) => set((s) => ({ activeTool: s.activeTool === tool ? null : tool })),
 
   addNote: (position) => {
     const { nodes } = get();

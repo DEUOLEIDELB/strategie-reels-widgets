@@ -3,7 +3,15 @@ import { Plus, Copy, Pencil, Trash2, LayoutDashboard, StickyNote, Square, Type }
 import toast from 'react-hot-toast';
 import { useReactFlow } from '@xyflow/react';
 import { Button, Select, ConfirmDialog, Tooltip } from '@/shared/components';
-import { useAteliers, useDeleteAtelier, useDuplicateAtelier } from '@/shared/hooks/grist';
+import {
+  useAteliers,
+  useDeleteAtelier,
+  useDuplicateAtelier,
+  useAvatars,
+  useAngles,
+  usePainPoints,
+  useReels,
+} from '@/shared/hooks/grist';
 import { useAppStore } from '@/shared/store';
 import type { Atelier } from '@/shared/lib/types';
 import { CreateAtelierModal } from './modals/CreateAtelierModal';
@@ -20,27 +28,25 @@ export function AtelierHeader({ current }: Props) {
   const duplicate = useDuplicateAtelier();
   const del = useDeleteAtelier();
   const relayout = useAtelierView((s) => s.relayout);
-  const addNote = useAtelierView((s) => s.addNote);
-  const addFrame = useAtelierView((s) => s.addFrame);
-  const addText = useAtelierView((s) => s.addText);
+  const activeTool = useAtelierView((s) => s.activeTool);
+  const toggleActiveTool = useAtelierView((s) => s.toggleActiveTool);
   const rf = useReactFlow();
 
-  // Position dans le viewport actuel pour les nouveaux objets freeform
-  const viewportCenterPosition = () => {
-    try {
-      const flowEl = document.querySelector('.react-flow') as HTMLElement | null;
-      const rect = flowEl?.getBoundingClientRect();
-      if (rect) {
-        return rf.screenToFlowPosition({
-          x: rect.left + rect.width / 2,
-          y: rect.top + rect.height / 3, // un peu plus haut que le centre, sous le header
-        });
-      }
-    } catch {
-      // fall through
-    }
-    return undefined;
+  // Briques pour estimer la hauteur correcte des cards lors du relayout
+  const avatars = useAvatars();
+  const angles = useAngles();
+  const pains = usePainPoints();
+  const reels = useReels();
+  const handleRelayout = () => {
+    relayout({
+      avatars: avatars.data ?? [],
+      angles: angles.data ?? [],
+      pains: pains.data ?? [],
+      reels: reels.data ?? [],
+    });
+    setTimeout(() => rf.fitView({ padding: 0.2, duration: 250 }), 80);
   };
+
 
   const [createOpen, setCreateOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -118,43 +124,37 @@ export function AtelierHeader({ current }: Props) {
               </Button>
             </Tooltip>
 
-            <Tooltip content="Réorganiser le canvas">
-              <Button variant="ghost" size="sm" onClick={relayout}>
+            <Tooltip content="Réorganiser le canvas (ignore notes/cadres/textes)">
+              <Button variant="ghost" size="sm" onClick={handleRelayout}>
                 <LayoutDashboard size={12} />
               </Button>
             </Tooltip>
 
-            <Tooltip content="Ajouter une note (sticky)">
+            <Tooltip content={activeTool === 'note' ? 'Click sur le canvas pour poser la note' : 'Sélectionner outil note (puis click sur canvas)'}>
               <Button
-                variant="ghost"
+                variant={activeTool === 'note' ? 'primary' : 'ghost'}
                 size="sm"
-                onClick={() => {
-                  addNote(viewportCenterPosition());
-                }}
+                onClick={() => toggleActiveTool('note')}
               >
                 <StickyNote size={12} />
               </Button>
             </Tooltip>
 
-            <Tooltip content="Ajouter un cadre (frame redimensionnable)">
+            <Tooltip content={activeTool === 'frame' ? 'Click sur le canvas pour poser le cadre' : 'Sélectionner outil cadre'}>
               <Button
-                variant="ghost"
+                variant={activeTool === 'frame' ? 'primary' : 'ghost'}
                 size="sm"
-                onClick={() => {
-                  addFrame(viewportCenterPosition());
-                }}
+                onClick={() => toggleActiveTool('frame')}
               >
                 <Square size={12} />
               </Button>
             </Tooltip>
 
-            <Tooltip content="Ajouter du texte libre">
+            <Tooltip content={activeTool === 'text' ? 'Click sur le canvas pour poser le texte' : 'Sélectionner outil texte'}>
               <Button
-                variant="ghost"
+                variant={activeTool === 'text' ? 'primary' : 'ghost'}
                 size="sm"
-                onClick={() => {
-                  addText(viewportCenterPosition());
-                }}
+                onClick={() => toggleActiveTool('text')}
               >
                 <Type size={12} />
               </Button>

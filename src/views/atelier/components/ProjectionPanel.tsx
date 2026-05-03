@@ -3,8 +3,10 @@ import { Users, Compass, AlertTriangle, Film, CheckCircle2, Circle } from 'lucid
 import { Tooltip } from '@/shared/components';
 import { cn } from '@/shared/lib/utils';
 import type { AtelierNodeType } from '@/shared/lib/types';
+import { useAvatars, useAngles, usePainPoints, useReels } from '@/shared/hooks/grist';
 import { useAtelierView } from '../store';
-import { isSlotFilled, type BriqueSlot } from '../lib/briqueSlots';
+import { isSlotFilled } from '../lib/briqueSlots';
+import { computeSlotsForNode, type BriquesDataSnapshot } from '../lib/computeSlots';
 
 interface TypeStats {
   type: AtelierNodeType;
@@ -38,12 +40,22 @@ export function ProjectionPanel() {
   const nodes = useAtelierView((s) => s.nodes);
   const edges = useAtelierView((s) => s.edges);
 
+  const { data: avatars } = useAvatars();
+  const { data: angles } = useAngles();
+  const { data: pains } = usePainPoints();
+  const { data: reels } = useReels();
+
+  const briques: BriquesDataSnapshot = useMemo(
+    () => ({ avatars: avatars ?? [], angles: angles ?? [], pains: pains ?? [], reels: reels ?? [] }),
+    [avatars, angles, pains, reels],
+  );
+
   const stats = useMemo(() => {
     const types: AtelierNodeType[] = ['avatar', 'angle', 'pain', 'reel'];
     const typeStats: TypeStats[] = types.map((t) => {
       const nodesOfType = nodes.filter((n) => n.type === t);
       const complete = nodesOfType.filter((n) => {
-        const slots = ((n.data as { slots?: BriqueSlot[] }).slots ?? []) as BriqueSlot[];
+        const slots = computeSlotsForNode(n, briques);
         if (slots.length === 0) return false;
         return slots.every(isSlotFilled);
       }).length;
@@ -80,7 +92,7 @@ export function ProjectionPanel() {
         });
       });
 
-      const slots = ((reel.data as { slots?: BriqueSlot[] }).slots ?? []) as BriqueSlot[];
+      const slots = computeSlotsForNode(reel, briques);
       const allFilled = slots.length > 0 && slots.every(isSlotFilled);
 
       if (!hasFullChain) {
@@ -100,7 +112,7 @@ export function ProjectionPanel() {
     };
 
     return { typeStats, branch };
-  }, [nodes, edges]);
+  }, [nodes, edges, briques]);
 
   if (nodes.length === 0) return null;
 

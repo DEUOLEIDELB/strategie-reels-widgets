@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { type NodeProps, type Node } from '@xyflow/react';
 import { Trash2, Type } from 'lucide-react';
 import { Tooltip } from '@/shared/components';
@@ -33,24 +33,48 @@ function TextNodeImpl({ id, data, selected }: NodeProps<TextNodeType>) {
   const [content, setContent] = useState(data.content ?? '');
   useEffect(() => setContent(data.content ?? ''), [data.content]);
 
+  // Mode édition : false par défaut (la card est draggable). True après double-click.
+  const [editing, setEditing] = useState(content.length === 0);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-focus quand on passe en édition
+  useEffect(() => {
+    if (editing && taRef.current) {
+      taRef.current.focus();
+      const len = taRef.current.value.length;
+      taRef.current.setSelectionRange(len, len);
+    }
+  }, [editing]);
+
+  // Quand on déselectionne le node, on quitte l'édition
+  useEffect(() => {
+    if (!selected && editing && content.length > 0) {
+      setEditing(false);
+    }
+  }, [selected, editing, content]);
+
   const color = data.color ?? '#191919';
   const fontSize = data.fontSize ?? 14;
 
   return (
     <div
       className={cn(
-        'relative min-w-[120px] max-w-[480px] px-1 py-0.5',
+        'relative min-w-[120px] max-w-[480px] px-1 py-0.5 rounded-sm',
         selected ? 'ring-1 ring-current ring-offset-1' : '',
+        editing ? 'bg-surface/40' : 'cursor-grab active:cursor-grabbing',
       )}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        setEditing(true);
+      }}
     >
-      {/* Toolbar visible quand selected */}
       {selected && (
         <div
-          className="absolute -top-9 left-0 z-10 inline-flex items-center gap-1 px-1.5 py-1 rounded-sm bg-surface border border-border-strong shadow-sm nodrag"
+          className="absolute -top-9 left-0 z-10 inline-flex items-center gap-1 px-1.5 py-1 rounded-sm bg-surface border border-border-strong shadow-sm nodrag nopan"
           onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           <Type size={11} className="text-text-faint" />
-          {/* Couleur */}
           {PRESET_COLORS.map((c) => (
             <button
               key={c.id}
@@ -65,7 +89,6 @@ function TextNodeImpl({ id, data, selected }: NodeProps<TextNodeType>) {
             />
           ))}
           <span className="w-px h-4 bg-border mx-0.5" />
-          {/* Taille */}
           {FONT_SIZES.map((sz) => (
             <button
               key={sz}
@@ -83,6 +106,11 @@ function TextNodeImpl({ id, data, selected }: NodeProps<TextNodeType>) {
             </button>
           ))}
           <span className="w-px h-4 bg-border mx-0.5" />
+          <Tooltip content={editing ? 'Cliquer ailleurs pour finir' : 'Double-clic pour éditer'}>
+            <span className="text-[10px] text-text-faint italic px-1">
+              {editing ? 'éd.' : '↕ drag'}
+            </span>
+          </Tooltip>
           <Tooltip content="Supprimer">
             <button
               type="button"
@@ -95,17 +123,32 @@ function TextNodeImpl({ id, data, selected }: NodeProps<TextNodeType>) {
         </div>
       )}
 
-      <textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        onBlur={() => {
-          if (content !== (data.content ?? '')) setNoteContent(id, content);
-        }}
-        placeholder="Texte libre..."
-        className="w-full bg-transparent border-0 resize-none focus:outline-none focus:ring-0 leading-tight nodrag"
-        style={{ color, fontSize: `${fontSize}px`, fontWeight: fontSize >= 24 ? 700 : 500 }}
-        rows={1}
-      />
+      {editing ? (
+        <textarea
+          ref={taRef}
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          onBlur={() => {
+            if (content !== (data.content ?? '')) setNoteContent(id, content);
+            if (content.length > 0) setEditing(false);
+          }}
+          placeholder="Texte libre..."
+          className="w-full bg-transparent border-0 resize-none focus:outline-none focus:ring-0 leading-tight nodrag"
+          style={{ color, fontSize: `${fontSize}px`, fontWeight: fontSize >= 24 ? 700 : 500 }}
+          rows={1}
+        />
+      ) : (
+        <div
+          className="w-full leading-tight whitespace-pre-wrap break-words pointer-events-none select-none"
+          style={{ color, fontSize: `${fontSize}px`, fontWeight: fontSize >= 24 ? 700 : 500 }}
+        >
+          {content || (
+            <span className="italic opacity-50" style={{ fontSize: `${fontSize}px` }}>
+              Texte vide (double-clic pour éditer)
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

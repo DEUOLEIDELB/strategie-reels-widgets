@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { Plus, Trash2, Pencil } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
@@ -6,7 +6,9 @@ import { Tooltip } from '@/shared/components';
 import { nodeStyleOf } from '../../lib/nodeStyle';
 import { nextLevelOf, type BriqueNode } from '../../lib/nodeFactory';
 import { useNodeCallbacks } from './NodeCallbacksContext';
+import { useBriquesData } from './BriquesDataContext';
 import { isSlotFilled, isSlotOverridden, type BriqueSlot } from '../../lib/briqueSlots';
+import { computeSlotsForNode, computeBriqueDisplay } from '../../lib/computeSlots';
 
 const VARIANT_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 
@@ -95,18 +97,38 @@ function VariantRow({ slot, variantIndex, onClick }: VariantRowProps) {
   );
 }
 
-function BriqueNodeCardImpl({ id, data, selected }: NodeProps<BriqueNode>) {
+function BriqueNodeCardImpl({ id, data, type, selected, ...rest }: NodeProps<BriqueNode>) {
   const { onAddChild, onRemove, onOpenDrawer } = useNodeCallbacks();
+  const briques = useBriquesData();
   const style = nodeStyleOf(data.type);
   const child = nextLevelOf(data.type);
   const childLabel = child === 'angle' ? 'Angle' : child === 'pain' ? 'Pain' : child === 'reel' ? 'Reel' : null;
 
-  const slots = data.slots ?? [];
+  // Slots calculés à la volée depuis les records Grist + overrides locaux.
+  // Garantit un re-render immédiat quand on ajoute/modifie une variante.
+  const slots = useMemo(() => {
+    return computeSlotsForNode(
+      { id, type, data, position: { x: 0, y: 0 } } as Parameters<typeof computeSlotsForNode>[0],
+      briques,
+    );
+  }, [id, type, data, briques]);
+
+  const display = useMemo(
+    () =>
+      computeBriqueDisplay(
+        { id, type, data, position: { x: 0, y: 0 } } as Parameters<typeof computeBriqueDisplay>[0],
+        briques,
+      ),
+    [id, type, data, briques],
+  );
+
   const filledCount = slots.filter(isSlotFilled).length;
   const overrideCount = slots.filter(isSlotOverridden).length;
   const totalSlots = slots.length || 3;
   const totalVariants = slots.reduce((acc, s) => acc + Math.max(s.variants.length, 1), 0);
-  const displayLabel = data.labelOverride && data.labelOverride.length > 0 ? data.labelOverride : data.label;
+  const displayLabel = display.label || 'Brique introuvable';
+  // Préserve l'API : le composant ne reçoit plus rest.* utilisés directement
+  void rest;
 
   return (
     <div
@@ -171,8 +193,8 @@ function BriqueNodeCardImpl({ id, data, selected }: NodeProps<BriqueNode>) {
       {/* Titre + subtitle */}
       <div className="mb-2">
         <div className="text-sm font-semibold leading-tight text-text line-clamp-1">{displayLabel}</div>
-        {data.subtitle && (
-          <div className="mt-0.5 text-[11px] text-text-faint leading-snug line-clamp-1">{data.subtitle}</div>
+        {display.subtitle && (
+          <div className="mt-0.5 text-[11px] text-text-faint leading-snug line-clamp-1">{display.subtitle}</div>
         )}
       </div>
 

@@ -20,6 +20,7 @@ import {
 import toast from 'react-hot-toast';
 import { Sparkles } from 'lucide-react';
 import { EmptyState } from '@/shared/components';
+import { cn } from '@/shared/lib/utils';
 import {
   parseCanvasState,
   type Atelier,
@@ -27,9 +28,9 @@ import {
 } from '@/shared/lib/types';
 import { useAvatars, useAngles, usePainPoints, useReels } from '@/shared/hooks/grist';
 import { canConnect, nextLevelOf } from '../lib/nodeFactory';
-import { slotsForAvatar, slotsForAngle, slotsForPain, slotsForReel, emptySlotsFor } from '../lib/briqueSlots';
 import { NODE_TYPES } from './nodes/nodeTypes';
 import { NodeCallbacksProvider } from './nodes/NodeCallbacksContext';
+import { BriquesDataProvider } from './nodes/BriquesDataContext';
 import { DeletableEdge } from './edges/DeletableEdge';
 import { useDebouncedCanvasSave } from '../hooks/useDebouncedCanvasSave';
 import { useAtelierView } from '../store';
@@ -70,6 +71,11 @@ function CanvasInner({ atelier }: Props) {
   const addBrique = useAtelierView((s) => s.addBrique);
   const openBriqueDrawer = useAtelierView((s) => s.openBriqueDrawer);
   const setLastSavedSnapshot = useAtelierView((s) => s.setLastSavedSnapshot);
+  const activeTool = useAtelierView((s) => s.activeTool);
+  const setActiveTool = useAtelierView((s) => s.setActiveTool);
+  const addNote = useAtelierView((s) => s.addNote);
+  const addFrame = useAtelierView((s) => s.addFrame);
+  const addText = useAtelierView((s) => s.addText);
 
   const rf = useReactFlow();
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -152,57 +158,18 @@ function CanvasInner({ atelier }: Props) {
   const { data: pains } = usePainPoints();
   const { data: reels } = useReels();
 
-  // Hydrate les labels, subtitles et slots depuis Grist (template) en respectant les overrides locaux.
-  useEffect(() => {
-    if (!avatars || !angles || !pains || !reels) return;
-    setNodes((prev) =>
-      prev.map((n) => {
-        if (n.type === 'note' || n.type === 'frame' || n.type === 'text') return n; // freeform : pas de template Grist
-        const data = n.data as {
-          briqueId?: number;
-          label?: string;
-          overrides?: Record<string, string[] | string>;
-          labelOverride?: string;
-        };
-        const briqueId = Number(data?.briqueId ?? 0);
-        const nodeType = n.type as AtelierNodeType | undefined;
-        const overrides = data?.overrides ?? {};
-        let label = String(data?.label ?? '');
-        let subtitle: string | undefined;
-        let slots = emptySlotsFor(nodeType ?? 'avatar', overrides);
-        if (nodeType === 'avatar') {
-          const a = avatars.find((x) => x.id === briqueId);
-          if (a) {
-            label = a.prenom || label;
-            subtitle = [a.age_range, a.lieu].filter(Boolean).join(' · ');
-            slots = slotsForAvatar(a, overrides);
-          }
-        } else if (nodeType === 'angle') {
-          const a = angles.find((x) => x.id === briqueId);
-          if (a) {
-            label = a.nom || label;
-            subtitle = a.cible_primaire;
-            slots = slotsForAngle(a, overrides);
-          }
-        } else if (nodeType === 'pain') {
-          const p = pains.find((x) => x.id === briqueId);
-          if (p) {
-            label = p.titre || label;
-            subtitle = p.frequence_vecue;
-            slots = slotsForPain(p, overrides);
-          }
-        } else if (nodeType === 'reel') {
-          const r = reels.find((x) => x.id === briqueId);
-          if (r) {
-            label = r.titre || label;
-            subtitle = [r.statut, r.duree_sec ? `${r.duree_sec}s` : null].filter(Boolean).join(' · ');
-            slots = slotsForReel(r, overrides);
-          }
-        }
-        return { ...n, data: { ...n.data, label, subtitle, slots } };
-      }),
-    );
-  }, [avatars, angles, pains, reels, setNodes]);
+  // Snapshot des records Grist mis à dispo via context aux nodes.
+  // Les slots et labels sont calculés à la volée dans BriqueNodeCard / ProjectionPanel.
+  // Plus d'hydratation côté CanvasFlow → plus de bug de rafraichissement.
+  const briquesData = useMemo(
+    () => ({
+      avatars: avatars ?? [],
+      angles: angles ?? [],
+      pains: pains ?? [],
+      reels: reels ?? [],
+    }),
+    [avatars, angles, pains, reels],
+  );
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
@@ -270,11 +237,30 @@ function CanvasInner({ atelier }: Props) {
     [openBriqueDrawer],
   );
 
+  // Mode "outil sélectionné" : click sur la zone vide du canvas pose l'élément.
+  const onPaneClick = useCallback(
+    (event: React.MouseEvent) => {
+      if (!activeTool) return;
+      const position = rf.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      if (activeTool === 'note') addNote(position);
+      else if (activeTool === 'frame') addFrame(position);
+      else if (activeTool === 'text') addText(position);
+      setActiveTool(null);
+    },
+    [activeTool, rf, addNote, addFrame, addText, setActiveTool],
+  );
+
   useDebouncedCanvasSave({ atelierId: atelier.id, nodes, edges, enabled: true });
 
   return (
+    <BriquesDataProvider value={briquesData}>
     <NodeCallbacksProvider value={callbacks}>
-      <div ref={wrapperRef} className="w-full h-full relative" onDragOver={onDragOver} onDrop={onDrop}>
+      <div
+        ref={wrapperRef}
+        className={cn('w-full h-full relative', activeTool ? 'cursor-crosshair' : '')}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+      >
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -284,6 +270,7 @@ function CanvasInner({ atelier }: Props) {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onNodeDoubleClick={onNodeDoubleClick}
+          onPaneClick={onPaneClick}
           deleteKeyCode={['Delete', 'Backspace']}
           proOptions={{ hideAttribution: true }}
           defaultEdgeOptions={{ type: 'deletable' }}
@@ -305,6 +292,7 @@ function CanvasInner({ atelier }: Props) {
         )}
       </div>
     </NodeCallbacksProvider>
+    </BriquesDataProvider>
   );
 }
 

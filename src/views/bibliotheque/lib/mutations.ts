@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { addRecords, updateRecord, deleteRecord } from '@/shared/lib/grist-api';
 import type { BrollPlan, SessionTournage, Ressource } from '@/shared/lib/types';
 import type { RessourceWithAction } from '../types';
+import type { ReelReference } from './queries';
 
 // Mutations locales à la Bibliothèque, sans toucher à shared/.
 // Invalidate les queryKeys utilisés par les hooks shared (broll, sessions, ressources).
@@ -9,10 +10,12 @@ import type { RessourceWithAction } from '../types';
 type BrollInput = Partial<Omit<BrollPlan, 'id'>>;
 type SessionInput = Partial<Omit<SessionTournage, 'id'>>;
 type RessourceInput = Partial<Omit<RessourceWithAction, 'id'>>;
+type ReelRefInput = Partial<Omit<ReelReference, 'id'>>;
 
 const QK_BROLL = ['broll'] as const;
 const QK_SESSIONS = ['sessions'] as const;
 const QK_RESSOURCES = ['ressources'] as const;
+const QK_REFS = ['reels_references'] as const;
 
 export function useCreateBroll() {
   const qc = useQueryClient();
@@ -135,5 +138,43 @@ export function useDeleteRessource() {
   return useMutation({
     mutationFn: (id: number) => deleteRecord('Ressources', id),
     onSuccess: () => qc.invalidateQueries({ queryKey: QK_RESSOURCES }),
+  });
+}
+
+export function useCreateReelReference() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ReelRefInput) =>
+      addRecords('Reels_references', [data as Record<string, unknown>]),
+    onSuccess: () => qc.invalidateQueries({ queryKey: QK_REFS }),
+  });
+}
+
+export function useUpdateReelReference() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, fields }: { id: number; fields: ReelRefInput }) =>
+      updateRecord('Reels_references', id, fields as Record<string, unknown>),
+    onMutate: async ({ id, fields }) => {
+      await qc.cancelQueries({ queryKey: QK_REFS });
+      const prev = qc.getQueryData<ReelReference[]>(QK_REFS);
+      if (prev) {
+        qc.setQueryData<ReelReference[]>(
+          QK_REFS,
+          prev.map((r) => (r.id === id ? { ...r, ...(fields as Partial<ReelReference>) } : r)),
+        );
+      }
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => ctx?.prev && qc.setQueryData(QK_REFS, ctx.prev),
+    onSettled: () => qc.invalidateQueries({ queryKey: QK_REFS }),
+  });
+}
+
+export function useDeleteReelReference() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => deleteRecord('Reels_references', id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: QK_REFS }),
   });
 }

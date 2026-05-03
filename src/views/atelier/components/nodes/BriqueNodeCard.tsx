@@ -6,44 +6,49 @@ import { Tooltip } from '@/shared/components';
 import { nodeStyleOf } from '../../lib/nodeStyle';
 import { nextLevelOf, type BriqueNode } from '../../lib/nodeFactory';
 import { useNodeCallbacks } from './NodeCallbacksContext';
-import { effectiveValue, isSlotFilled, isSlotOverridden, variantCount, type BriqueSlot } from '../../lib/briqueSlots';
+import { isSlotFilled, isSlotOverridden, type BriqueSlot } from '../../lib/briqueSlots';
 
-interface SlotRowProps {
+const VARIANT_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+
+interface VariantRowProps {
   slot: BriqueSlot;
+  // null = afficher le template (pas d'override). Sinon : afficher variants[index].
+  variantIndex: number | null;
   onClick: () => void;
 }
 
-function SlotRow({ slot, onClick }: SlotRowProps) {
-  const filled = isSlotFilled(slot);
-  const overridden = isSlotOverridden(slot);
-  const variants = variantCount(slot);
-  const value = effectiveValue(slot);
-  const preview = filled ? value : '(vide — clique pour remplir)';
+function VariantRow({ slot, variantIndex, onClick }: VariantRowProps) {
+  const isVariant = variantIndex !== null;
+  const value = isVariant ? slot.variants[variantIndex] : slot.templateValue;
+  const filled = Boolean(value && value.trim().length > 0);
+
+  // Label : "Hook" si template, "Hook A" / "Hook B" / "Hook C" si variantes
+  const labelText = isVariant
+    ? `${slot.label} ${VARIANT_LETTERS[variantIndex] ?? variantIndex + 1}`
+    : slot.label;
+
+  const showLocalBadge = isVariant && slot.variants.length === 1;
 
   return (
     <Tooltip
       content={
         <div className="max-w-[280px] space-y-1">
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] uppercase tracking-wide font-semibold opacity-90">{slot.label}</span>
-            {variants > 1 && (
+            <span className="text-[10px] uppercase tracking-wide font-semibold opacity-90">{labelText}</span>
+            {isVariant ? (
               <span className="text-[9px] uppercase font-semibold px-1 rounded-sm bg-current text-on-current">
-                {variants} variantes
+                {slot.variants.length > 1 ? `variante ${VARIANT_LETTERS[variantIndex] ?? variantIndex + 1}` : 'local'}
               </span>
-            )}
-            {variants === 1 && (
-              <span className="text-[9px] uppercase font-semibold px-1 rounded-sm bg-current text-on-current">
-                local
+            ) : (
+              <span className="text-[9px] uppercase font-semibold px-1 rounded-sm bg-surface-alt text-text-faint">
+                template
               </span>
             )}
           </div>
           <div className="text-[11px] italic opacity-70">Clique pour éditer · {slot.hint}</div>
-          <div className="text-[12px] leading-snug whitespace-pre-line break-words">{preview}</div>
-          {variants > 1 && (
-            <div className="text-[10px] opacity-60 italic pt-0.5 border-t border-current/20">
-              + {variants - 1} autre{variants > 2 ? 's' : ''} variante{variants > 2 ? 's' : ''} (visible{variants > 2 ? 's' : ''} dans le drawer)
-            </div>
-          )}
+          <div className="text-[12px] leading-snug whitespace-pre-line break-words">
+            {filled ? value : '(vide — clique pour remplir)'}
+          </div>
         </div>
       }
     >
@@ -56,28 +61,24 @@ function SlotRow({ slot, onClick }: SlotRowProps) {
         className={cn(
           'w-full flex items-start gap-2 rounded-sm border px-2 py-1.5 text-left transition-colors',
           filled
-            ? overridden
+            ? isVariant
               ? 'bg-current-soft border-current/40 hover:bg-current-soft/80'
               : 'bg-surface border-border-strong hover:bg-surface-alt'
             : 'bg-surface-alt border-dashed border-border hover:bg-surface',
         )}
       >
-        <div
-          className={cn(
-            'shrink-0 flex flex-col items-start gap-0.5 mt-0.5 w-[44px]',
-          )}
-        >
+        <div className="shrink-0 flex flex-col items-start gap-0.5 mt-0.5 w-[44px]">
           <div
             className={cn(
               'text-[9px] uppercase tracking-wide font-semibold leading-none',
-              overridden ? 'text-current' : 'text-text-faint',
+              isVariant ? 'text-current' : 'text-text-faint',
             )}
           >
-            {slot.label}
+            {labelText}
           </div>
-          {variants > 1 && (
-            <div className="text-[9px] font-bold tabular-nums px-1 rounded-sm bg-current text-on-current leading-tight">
-              ×{variants}
+          {showLocalBadge && (
+            <div className="text-[8px] font-bold tabular-nums px-1 rounded-sm bg-current text-on-current leading-tight">
+              local
             </div>
           )}
         </div>
@@ -104,6 +105,7 @@ function BriqueNodeCardImpl({ id, data, selected }: NodeProps<BriqueNode>) {
   const filledCount = slots.filter(isSlotFilled).length;
   const overrideCount = slots.filter(isSlotOverridden).length;
   const totalSlots = slots.length || 3;
+  const totalVariants = slots.reduce((acc, s) => acc + Math.max(s.variants.length, 1), 0);
   const displayLabel = data.labelOverride && data.labelOverride.length > 0 ? data.labelOverride : data.label;
 
   return (
@@ -131,7 +133,7 @@ function BriqueNodeCardImpl({ id, data, selected }: NodeProps<BriqueNode>) {
         >
           {style.badgeLabel}
         </span>
-        <Tooltip content={`${filledCount} sur ${totalSlots} slots remplis. Double-clic pour éditer cette instance.`}>
+        <Tooltip content={`${filledCount} slots / ${totalSlots} ont au moins une valeur. ${totalVariants} ligne${totalVariants > 1 ? 's' : ''} affichée${totalVariants > 1 ? 's' : ''}.`}>
           <span
             className={cn(
               'text-[10px] tabular-nums px-1 rounded-sm cursor-help',
@@ -142,14 +144,14 @@ function BriqueNodeCardImpl({ id, data, selected }: NodeProps<BriqueNode>) {
           </span>
         </Tooltip>
         {overrideCount > 0 && (
-          <Tooltip content={`${overrideCount} slot${overrideCount > 1 ? 's' : ''} édité${overrideCount > 1 ? 's' : ''} localement, indépendamment du template.`}>
+          <Tooltip content={`${overrideCount} slot${overrideCount > 1 ? 's' : ''} avec override${overrideCount > 1 ? 's' : ''} local${overrideCount > 1 ? 'aux' : ''}.`}>
             <span className="text-[10px] px-1 rounded-sm bg-current-soft text-current cursor-help font-medium">
               local
             </span>
           </Tooltip>
         )}
         <span className="ml-auto inline-flex items-center gap-0.5">
-          <Tooltip content="Double-clic sur la carte pour éditer cette instance">
+          <Tooltip content="Double-clic ou clique sur un slot pour éditer cette instance">
             <Pencil size={10} className="text-text-muted" />
           </Tooltip>
           <button
@@ -174,12 +176,29 @@ function BriqueNodeCardImpl({ id, data, selected }: NodeProps<BriqueNode>) {
         )}
       </div>
 
-      {/* Slots verticaux : un par ligne pour la lisibilité. Click ouvre le drawer focalisé. */}
+      {/* Slots : un row par variante (ou 1 row pour le template si pas d'override). */}
       {slots.length > 0 && (
         <div className="flex flex-col gap-1">
-          {slots.map((s) => (
-            <SlotRow key={s.id} slot={s} onClick={() => onOpenDrawer(id)} />
-          ))}
+          {slots.flatMap((s) => {
+            if (s.variants.length === 0) {
+              return [
+                <VariantRow
+                  key={s.id}
+                  slot={s}
+                  variantIndex={null}
+                  onClick={() => onOpenDrawer(id)}
+                />,
+              ];
+            }
+            return s.variants.map((_, i) => (
+              <VariantRow
+                key={`${s.id}-${i}`}
+                slot={s}
+                variantIndex={i}
+                onClick={() => onOpenDrawer(id)}
+              />
+            ));
+          })}
         </div>
       )}
 

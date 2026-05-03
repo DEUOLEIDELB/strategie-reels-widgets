@@ -49,7 +49,7 @@ export function buildEdge(sourceId: string, targetId: string): Edge {
     id: `${sourceId}->${targetId}`,
     source: sourceId,
     target: targetId,
-    type: 'smoothstep',
+    type: 'deletable',
     animated: false,
   };
 }

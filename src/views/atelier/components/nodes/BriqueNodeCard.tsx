@@ -10,13 +10,14 @@ import { effectiveValue, isSlotFilled, isSlotOverridden, type BriqueSlot } from 
 
 interface SlotRowProps {
   slot: BriqueSlot;
+  onClick: () => void;
 }
 
-function SlotRow({ slot }: SlotRowProps) {
+function SlotRow({ slot, onClick }: SlotRowProps) {
   const filled = isSlotFilled(slot);
   const overridden = isSlotOverridden(slot);
   const value = effectiveValue(slot);
-  const preview = filled ? value : '(vide)';
+  const preview = filled ? value : '(vide — clique pour remplir)';
 
   return (
     <Tooltip
@@ -30,19 +31,24 @@ function SlotRow({ slot }: SlotRowProps) {
               </span>
             )}
           </div>
-          <div className="text-[11px] italic opacity-70">{slot.hint}</div>
+          <div className="text-[11px] italic opacity-70">Clique pour éditer · {slot.hint}</div>
           <div className="text-[12px] leading-snug whitespace-pre-line break-words">{preview}</div>
         </div>
       }
     >
-      <div
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
         className={cn(
-          'flex items-start gap-2 rounded-sm border px-2 py-1.5 cursor-help',
+          'w-full flex items-start gap-2 rounded-sm border px-2 py-1.5 text-left transition-colors',
           filled
             ? overridden
-              ? 'bg-current-soft border-current/40'
-              : 'bg-surface border-border-strong'
-            : 'bg-surface-alt border-dashed border-border',
+              ? 'bg-current-soft border-current/40 hover:bg-current-soft/80'
+              : 'bg-surface border-border-strong hover:bg-surface-alt'
+            : 'bg-surface-alt border-dashed border-border hover:bg-surface',
         )}
       >
         <div
@@ -61,13 +67,13 @@ function SlotRow({ slot }: SlotRowProps) {
         >
           {filled ? value : '—'}
         </div>
-      </div>
+      </button>
     </Tooltip>
   );
 }
 
 function BriqueNodeCardImpl({ id, data, selected }: NodeProps<BriqueNode>) {
-  const { onAddChild, onRemove } = useNodeCallbacks();
+  const { onAddChild, onRemove, onOpenDrawer } = useNodeCallbacks();
   const style = nodeStyleOf(data.type);
   const child = nextLevelOf(data.type);
   const childLabel = child === 'angle' ? 'Angle' : child === 'pain' ? 'Pain' : child === 'reel' ? 'Reel' : null;
@@ -85,7 +91,12 @@ function BriqueNodeCardImpl({ id, data, selected }: NodeProps<BriqueNode>) {
         selected ? `${style.borderClass} shadow-md` : 'border-border-strong',
       )}
     >
-      <Handle type="target" position={Position.Left} className="!bg-text-faint !w-2 !h-2 !border-0" />
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!bg-current !w-3 !h-3 !border-2 !border-surface hover:!w-4 hover:!h-4 transition-all"
+        title="Cible : tirer une connexion vers cette brique"
+      />
 
       {/* Header : badge type + indicateurs + actions */}
       <div className="flex items-center gap-1.5 mb-1.5">
@@ -141,11 +152,11 @@ function BriqueNodeCardImpl({ id, data, selected }: NodeProps<BriqueNode>) {
         )}
       </div>
 
-      {/* Slots verticaux : un par ligne pour la lisibilité */}
+      {/* Slots verticaux : un par ligne pour la lisibilité. Click ouvre le drawer focalisé. */}
       {slots.length > 0 && (
         <div className="flex flex-col gap-1">
           {slots.map((s) => (
-            <SlotRow key={s.id} slot={s} />
+            <SlotRow key={s.id} slot={s} onClick={() => onOpenDrawer(id)} />
           ))}
         </div>
       )}
@@ -170,7 +181,12 @@ function BriqueNodeCardImpl({ id, data, selected }: NodeProps<BriqueNode>) {
         </button>
       )}
 
-      <Handle type="source" position={Position.Right} className="!bg-text-faint !w-2 !h-2 !border-0" />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!bg-current !w-3 !h-3 !border-2 !border-surface hover:!w-4 hover:!h-4 transition-all"
+        title="Source : tirer pour créer une nouvelle connexion"
+      />
     </div>
   );
 }

@@ -23,43 +23,19 @@ import { Sparkles } from 'lucide-react';
 import { EmptyState } from '@/shared/components';
 import {
   parseCanvasState,
-  serializeCanvasState,
   type Atelier,
   type AtelierNodeType,
-  type AtelierEdge,
-  type AtelierNode,
 } from '@/shared/lib/types';
 import { useAvatars, useAngles, usePainPoints, useReels } from '@/shared/hooks/grist';
 import { canConnect, nextLevelOf } from '../lib/nodeFactory';
 import { slotsForAvatar, slotsForAngle, slotsForPain, slotsForReel, emptySlotsFor } from '../lib/briqueSlots';
 import { NODE_TYPES } from './nodes/nodeTypes';
 import { NodeCallbacksProvider } from './nodes/NodeCallbacksContext';
+import { DeletableEdge } from './edges/DeletableEdge';
 import { useDebouncedCanvasSave } from '../hooks/useDebouncedCanvasSave';
 import { useAtelierView } from '../store';
 
-function snapshotOfRf(nodes: Node[], edges: Edge[]): string {
-  const n: AtelierNode[] = nodes.map((nd) => {
-    const d = nd.data as {
-      briqueId?: number;
-      label?: string;
-      overrides?: Record<string, string>;
-      labelOverride?: string;
-    };
-    return {
-      id: nd.id,
-      type: (nd.type as AtelierNodeType) ?? 'avatar',
-      position: { x: Math.round(nd.position.x), y: Math.round(nd.position.y) },
-      data: {
-        briqueId: Number(d?.briqueId ?? 0),
-        label: String(d?.label ?? ''),
-        overrides: d?.overrides && Object.keys(d.overrides).length > 0 ? d.overrides : undefined,
-        labelOverride: d?.labelOverride,
-      },
-    };
-  });
-  const e: AtelierEdge[] = edges.map((ed) => ({ id: ed.id, source: ed.source, target: ed.target }));
-  return serializeCanvasState({ nodes: n, edges: e });
-}
+const EDGE_TYPES = { deletable: DeletableEdge };
 
 interface DragPayload {
   type: AtelierNodeType;
@@ -94,31 +70,22 @@ function CanvasInner({ atelier }: Props) {
   const requestAddChild = useAtelierView((s) => s.requestAddChild);
   const addBrique = useAtelierView((s) => s.addBrique);
   const openBriqueDrawer = useAtelierView((s) => s.openBriqueDrawer);
-  const lastSavedSnapshot = useAtelierView((s) => s.lastSavedSnapshot);
   const setLastSavedSnapshot = useAtelierView((s) => s.setLastSavedSnapshot);
 
   const rf = useReactFlow();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const idRef = useRef<number>(-1);
 
-  // Hydrate le canvas depuis l'atelier courant. Au changement d'atelier.id : reload + fitView.
-  // Au changement de canvas_state (= polling distant) : reload silencieux SI on n'a pas de modif
-  // locale en attente (last-write-wins doux : tant que tu édites, on n'écrase pas).
+  // Charge le canvas UNE FOIS au switch d'atelier (atelier.id change).
+  // Note V1.5 : on ne réagit plus au changement de canvas_state distant (polling) pour eviter
+  // les ecrasements intempestifs pendant l'edition. Le multi-user canvas live est trade-off
+  // contre la stabilite. Pour voir un canvas modifie par un autre user : switch puis revient
+  // sur l'atelier, ou recharge la page.
+  // Les TEMPLATES (avatars/angles/pains/reels) restent rafraichis en live → tu vois les modifs
+  // de contenu que d'autres users font sur les briques sans reloader le canvas.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const remote = atelier.canvas_state ?? '';
-    const idChanged = idRef.current !== atelier.id;
-
-    if (!idChanged) {
-      // Modif distante éventuelle : on ne reload que si :
-      //  - le state distant n'est pas notre propre save (lastSavedSnapshot)
-      //  - notre canvas local est en sync avec lastSavedSnapshot (= pas de modif locale en cours)
-      if (remote === lastSavedSnapshot) return;
-      const localSnapshot = snapshotOfRf(nodes, edges);
-      const localDirty = lastSavedSnapshot !== null && localSnapshot !== lastSavedSnapshot;
-      if (localDirty) return; // on garde la version locale, save écrasera tout à l'heure
-    }
-
     const state = parseCanvasState(remote);
     const initialNodes: Node[] = state.nodes.map((n) => ({
       id: n.id,
@@ -136,17 +103,14 @@ function CanvasInner({ atelier }: Props) {
       id: e.id,
       source: e.source,
       target: e.target,
-      type: 'smoothstep',
+      type: 'deletable',
     }));
     setGraph(initialNodes, initialEdges);
     setLastSavedSnapshot(remote || null);
-
-    if (idChanged) {
-      idRef.current = atelier.id;
-      const t = window.setTimeout(() => rf.fitView({ padding: 0.2, duration: 250 }), 60);
-      return () => window.clearTimeout(t);
-    }
-  }, [atelier.id, atelier.canvas_state]);
+    idRef.current = atelier.id;
+    const t = window.setTimeout(() => rf.fitView({ padding: 0.2, duration: 250 }), 60);
+    return () => window.clearTimeout(t);
+  }, [atelier.id]);
 
   const { data: avatars } = useAvatars();
   const { data: angles } = useAngles();
@@ -224,7 +188,7 @@ function CanvasInner({ atelier }: Props) {
         toast.error('Cascade : avatar → angle → pain → reel uniquement.');
         return;
       }
-      setEdges((eds) => addEdge({ ...connection, type: 'smoothstep' }, eds));
+      setEdges((eds) => addEdge({ ...connection, type: 'deletable' }, eds));
     },
     [nodes, setEdges],
   );
@@ -241,8 +205,8 @@ function CanvasInner({ atelier }: Props) {
   );
 
   const callbacks = useMemo(
-    () => ({ onAddChild: handleAddChild, onRemove: removeNode }),
-    [handleAddChild, removeNode],
+    () => ({ onAddChild: handleAddChild, onRemove: removeNode, onOpenDrawer: openBriqueDrawer }),
+    [handleAddChild, removeNode, openBriqueDrawer],
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -278,12 +242,14 @@ function CanvasInner({ atelier }: Props) {
           nodes={nodes}
           edges={edges}
           nodeTypes={NODE_TYPES}
+          edgeTypes={EDGE_TYPES}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onNodeDoubleClick={onNodeDoubleClick}
+          deleteKeyCode={['Delete', 'Backspace']}
           proOptions={{ hideAttribution: true }}
-          defaultEdgeOptions={{ type: 'smoothstep' }}
+          defaultEdgeOptions={{ type: 'deletable' }}
         >
           <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} color="#D8D2CC" />
           <Controls position="bottom-left" showInteractive={false} />

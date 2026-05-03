@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Copy, Pencil, Trash2, LayoutDashboard } from 'lucide-react';
+import { Plus, Copy, Pencil, Trash2, LayoutDashboard, StickyNote } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Button, Select, ConfirmDialog, Tooltip } from '@/shared/components';
 import { useAteliers, useDeleteAtelier, useDuplicateAtelier } from '@/shared/hooks/grist';
@@ -19,6 +19,7 @@ export function AtelierHeader({ current }: Props) {
   const duplicate = useDuplicateAtelier();
   const del = useDeleteAtelier();
   const relayout = useAtelierView((s) => s.relayout);
+  const addNote = useAtelierView((s) => s.addNote);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -99,6 +100,19 @@ export function AtelierHeader({ current }: Props) {
             <Tooltip content="Réorganiser le canvas">
               <Button variant="ghost" size="sm" onClick={relayout}>
                 <LayoutDashboard size={12} />
+              </Button>
+            </Tooltip>
+
+            <Tooltip content="Ajouter une note libre (annotation)">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  addNote();
+                  toast('Note ajoutée. Clique-la pour écrire.', { icon: '📝' });
+                }}
+              >
+                <StickyNote size={12} />
               </Button>
             </Tooltip>
 

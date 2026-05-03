@@ -87,18 +87,28 @@ function CanvasInner({ atelier }: Props) {
   useEffect(() => {
     const remote = atelier.canvas_state ?? '';
     const state = parseCanvasState(remote);
-    const initialNodes: Node[] = state.nodes.map((n) => ({
-      id: n.id,
-      type: n.type,
-      position: n.position,
-      data: {
-        briqueId: n.data.briqueId,
+    const initialNodes: Node[] = state.nodes.map((n) => {
+      if (n.type === 'note') {
+        return {
+          id: n.id,
+          type: 'note',
+          position: n.position,
+          data: { content: n.data.content ?? '', color: n.data.color },
+        };
+      }
+      return {
+        id: n.id,
         type: n.type,
-        label: n.data.label,
-        overrides: n.data.overrides,
-        labelOverride: n.data.labelOverride,
-      },
-    }));
+        position: n.position,
+        data: {
+          briqueId: n.data.briqueId,
+          type: n.type,
+          label: n.data.label,
+          overrides: n.data.overrides,
+          labelOverride: n.data.labelOverride,
+        },
+      };
+    });
     const initialEdges: Edge[] = state.edges.map((e) => ({
       id: e.id,
       source: e.source,
@@ -122,10 +132,11 @@ function CanvasInner({ atelier }: Props) {
     if (!avatars || !angles || !pains || !reels) return;
     setNodes((prev) =>
       prev.map((n) => {
+        if (n.type === 'note') return n; // les notes n'ont pas de template Grist
         const data = n.data as {
           briqueId?: number;
           label?: string;
-          overrides?: Record<string, string>;
+          overrides?: Record<string, string[] | string>;
           labelOverride?: string;
         };
         const briqueId = Number(data?.briqueId ?? 0);
@@ -228,6 +239,7 @@ function CanvasInner({ atelier }: Props) {
   const onNodeDoubleClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
       if (!node.type) return;
+      if (node.type === 'note') return; // notes : édition en place
       openBriqueDrawer(node.id);
     },
     [openBriqueDrawer],

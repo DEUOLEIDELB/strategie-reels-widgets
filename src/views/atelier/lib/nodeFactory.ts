@@ -9,10 +9,15 @@ export interface BriqueNodeData extends Record<string, unknown> {
   subtitle?: string;
   slots?: BriqueSlot[];
   // Overrides locaux : ne touchent ni le template Grist ni les autres instances.
-  // Indexés par slot.id (hook, body, cta, qui, vit, achete, voix, force, quand, quoi, emotion, preuve).
+  // V1.6 : multi-variantes par slot (string[]). Rétrocompat string accepté à la lecture.
   overrides?: SlotOverrides;
   // Override du label (titre affiché sur la card). Si non set, on utilise le label hydraté du template.
   labelOverride?: string;
+}
+
+export interface NoteNodeData extends Record<string, unknown> {
+  content: string;
+  color?: string;
 }
 
 export type BriqueNode = Node<BriqueNodeData>;
@@ -81,4 +86,24 @@ export function countInstances(
     const data = n.data as { briqueId?: number } | undefined;
     return data?.briqueId === briqueId;
   }).length;
+}
+
+let noteCounter = 0;
+export function makeNoteId(): string {
+  noteCounter = (noteCounter + 1) % 1_000_000;
+  return `note-${Date.now().toString(36).slice(-4)}${noteCounter.toString(36)}`;
+}
+
+export function buildNoteNode(content: string, position: { x: number; y: number }, color?: string) {
+  return {
+    id: makeNoteId(),
+    type: 'note' as const,
+    position,
+    data: { content, color },
+  };
+}
+
+export function isBriqueNode(node: Node): boolean {
+  const t = node.type;
+  return t === 'avatar' || t === 'angle' || t === 'pain' || t === 'reel';
 }

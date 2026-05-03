@@ -6,7 +6,7 @@ import {
   type AtelierCanvasState,
   type AtelierEdge,
   type AtelierNode,
-  type AtelierNodeType,
+  type CanvasNodeType,
 } from '@/shared/lib/types';
 import { useAtelierView } from '../store';
 
@@ -17,12 +17,26 @@ function rfToCanvas(nodes: Node[], edges: Edge[]): AtelierCanvasState {
     const d = n.data as {
       briqueId?: number;
       label?: string;
-      overrides?: Record<string, string>;
+      overrides?: Record<string, string[] | string>;
       labelOverride?: string;
+      content?: string;
+      color?: string;
     };
+    const type = (n.type as CanvasNodeType) ?? 'avatar';
+    if (type === 'note') {
+      return {
+        id: n.id,
+        type,
+        position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
+        data: {
+          content: typeof d?.content === 'string' ? d.content : '',
+          color: d?.color,
+        },
+      };
+    }
     return {
       id: n.id,
-      type: (n.type as AtelierNodeType) ?? 'avatar',
+      type,
       position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
       data: {
         briqueId: Number(d?.briqueId ?? 0),

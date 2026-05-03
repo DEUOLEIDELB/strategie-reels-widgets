@@ -1,11 +1,13 @@
 import type { NodeTypes } from '@xyflow/react';
 import { BriqueNodeCard } from './BriqueNodeCard';
+import { NoteNode } from './NoteNode';
 
-// Le même composant gère les 4 types via data.type. Le mapping ci-dessous évite à React Flow de
-// râler sur les types inconnus, et permettra plus tard de spécialiser un type sans casser les autres.
+// Le même composant BriqueNodeCard gère les 4 types brique via data.type.
+// NoteNode est un sticky note libre, hors hiérarchie.
 export const NODE_TYPES: NodeTypes = {
   avatar: BriqueNodeCard,
   angle: BriqueNodeCard,
   pain: BriqueNodeCard,
   reel: BriqueNodeCard,
+  note: NoteNode,
 };

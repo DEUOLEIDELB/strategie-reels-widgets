@@ -250,18 +250,28 @@ export interface Sujet {
 
 export type AtelierNodeType = 'avatar' | 'angle' | 'pain' | 'reel';
 
+// Le type 'note' est un sticky-note libre, pas une brique pédagogique. Stocké dans le même
+// canvas_state pour simplicité, mais les notes n'ont ni briqueId ni slots.
+export type CanvasNodeType = AtelierNodeType | 'note';
+
 export interface AtelierNode {
   id: string;
-  type: AtelierNodeType;
+  type: CanvasNodeType;
   position: { x: number; y: number };
   data: {
-    briqueId: number;
-    label: string;
+    // Pour les briques (avatar/angle/pain/reel) :
+    briqueId?: number;
+    label?: string;
     // Overrides locaux propres à cette instance (ne touchent pas le record Grist).
-    // Indexés par slot.id (hook, body, cta, qui, vit, achete, voix, force, quand, quoi, emotion, preuve).
-    overrides?: Record<string, string>;
+    // Multi-variantes V1.6 : chaque slot peut contenir un array de strings (variantes A/B).
+    // Format legacy V1.4-V1.5 : string simple (rétrocompatibilité gérée à la lecture).
+    overrides?: Record<string, string[] | string>;
     // Override du titre affiché sur la card. Si non défini, on utilise le label hydraté du template.
     labelOverride?: string;
+
+    // Pour les sticky notes (type === 'note') :
+    content?: string;
+    color?: string; // hex couleur (par défaut jaune Wubo)
   };
 }
 

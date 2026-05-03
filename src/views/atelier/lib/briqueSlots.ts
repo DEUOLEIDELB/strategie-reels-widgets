@@ -3,21 +3,23 @@ import type { Avatar, Angle, PainPoint, Reel, AtelierNodeType } from '@/shared/l
 // Slots = sous-blocs visibles directement sur la carte du canvas.
 // Toujours 3 par type : pour structurer sans surcharger.
 //
-// Le "template" est la valeur du record Grist (partagée par toutes les instances).
-// L'override est local à un node et ne propage à personne d'autre — c'est l'esprit laboratoire :
-// chaque instance peut tester sa variante sans toucher au template ni aux autres instances.
+// Multi-variantes V1.6 :
+// Chaque slot peut avoir N "variantes" stockées localement (ex: 3 hooks différents pour le même reel).
+// Aucune variante = le slot affiche la valeur du template Grist.
+// 1+ variantes = le slot affiche la 1re et indique le compteur des autres.
+// Permet l'A/B testing sans dupliquer toute la brique.
 
 export interface BriqueSlot {
-  id: string; // ex: 'hook', 'body', 'cta', 'qui'...
-  label: string; // ex: 'Hook' (court, affiché sur la card)
-  hint: string; // hint pédagogique (tooltip, drawer)
-  templateValue: string; // valeur depuis le record Grist
-  overrideValue?: string; // valeur locale au node (si overridée)
+  id: string;
+  label: string;
+  hint: string;
+  templateValue: string; // valeur du record Grist
+  variants: string[]; // overrides locaux (peut être vide → utilise template)
 }
 
-// Helper : valeur effective (override prioritaire)
 export function effectiveValue(slot: BriqueSlot): string {
-  return slot.overrideValue !== undefined ? slot.overrideValue : slot.templateValue;
+  if (slot.variants.length > 0) return slot.variants[0];
+  return slot.templateValue;
 }
 
 export function isSlotFilled(slot: BriqueSlot): boolean {
@@ -26,7 +28,11 @@ export function isSlotFilled(slot: BriqueSlot): boolean {
 }
 
 export function isSlotOverridden(slot: BriqueSlot): boolean {
-  return slot.overrideValue !== undefined;
+  return slot.variants.length > 0;
+}
+
+export function variantCount(slot: BriqueSlot): number {
+  return slot.variants.length;
 }
 
 const SLOT_HINT: Record<string, string> = {
@@ -66,17 +72,38 @@ const SLOT_IDS: Record<AtelierNodeType, readonly string[]> = {
   pain: ['quoi', 'emotion', 'preuve'],
 };
 
-function makeSlot(id: string, templateValue: string, overrideValue?: string): BriqueSlot {
+// Type stocké dans le canvas_state : peut être string[] (V1.6+) ou string (legacy V1.4-V1.5).
+// La normalisation se fait à la lecture.
+export type SlotOverrides = Record<string, string[] | string>;
+
+export function normalizeVariants(raw: string[] | string | undefined): string[] {
+  if (raw === undefined || raw === null) return [];
+  if (Array.isArray(raw)) {
+    return raw.filter((v) => typeof v === 'string');
+  }
+  if (typeof raw === 'string' && raw.length > 0) return [raw];
+  return [];
+}
+
+export function normalizeOverrides(raw: SlotOverrides | undefined): Record<string, string[]> {
+  if (!raw) return {};
+  const result: Record<string, string[]> = {};
+  for (const k of Object.keys(raw)) {
+    const variants = normalizeVariants(raw[k]);
+    if (variants.length > 0) result[k] = variants;
+  }
+  return result;
+}
+
+function makeSlot(id: string, templateValue: string, variants: string[]): BriqueSlot {
   return {
     id,
     label: SLOT_LABEL[id] ?? id,
     hint: SLOT_HINT[id] ?? '',
     templateValue: (templateValue ?? '').trim(),
-    overrideValue,
+    variants,
   };
 }
-
-export type SlotOverrides = Record<string, string>;
 
 function reelTemplate(r: Reel, id: string): string {
   if (id === 'hook') return r.hook_verbal || r.titre_overlay || '';
@@ -110,21 +137,29 @@ function painTemplate(p: PainPoint, id: string): string {
 }
 
 export function slotsForReel(r: Reel, overrides: SlotOverrides = {}): BriqueSlot[] {
-  return SLOT_IDS.reel.map((id) => makeSlot(id, reelTemplate(r, id), overrides[id]));
+  return SLOT_IDS.reel.map((id) =>
+    makeSlot(id, reelTemplate(r, id), normalizeVariants(overrides[id])),
+  );
 }
 
 export function slotsForAvatar(a: Avatar, overrides: SlotOverrides = {}): BriqueSlot[] {
-  return SLOT_IDS.avatar.map((id) => makeSlot(id, avatarTemplate(a, id), overrides[id]));
+  return SLOT_IDS.avatar.map((id) =>
+    makeSlot(id, avatarTemplate(a, id), normalizeVariants(overrides[id])),
+  );
 }
 
 export function slotsForAngle(a: Angle, overrides: SlotOverrides = {}): BriqueSlot[] {
-  return SLOT_IDS.angle.map((id) => makeSlot(id, angleTemplate(a, id), overrides[id]));
+  return SLOT_IDS.angle.map((id) =>
+    makeSlot(id, angleTemplate(a, id), normalizeVariants(overrides[id])),
+  );
 }
 
 export function slotsForPain(p: PainPoint, overrides: SlotOverrides = {}): BriqueSlot[] {
-  return SLOT_IDS.pain.map((id) => makeSlot(id, painTemplate(p, id), overrides[id]));
+  return SLOT_IDS.pain.map((id) =>
+    makeSlot(id, painTemplate(p, id), normalizeVariants(overrides[id])),
+  );
 }
 
 export function emptySlotsFor(type: AtelierNodeType, overrides: SlotOverrides = {}): BriqueSlot[] {
-  return SLOT_IDS[type].map((id) => makeSlot(id, '', overrides[id]));
+  return SLOT_IDS[type].map((id) => makeSlot(id, '', normalizeVariants(overrides[id])));
 }

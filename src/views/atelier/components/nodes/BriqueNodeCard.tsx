@@ -6,7 +6,7 @@ import { Tooltip } from '@/shared/components';
 import { nodeStyleOf } from '../../lib/nodeStyle';
 import { nextLevelOf, type BriqueNode } from '../../lib/nodeFactory';
 import { useNodeCallbacks } from './NodeCallbacksContext';
-import { effectiveValue, isSlotFilled, isSlotOverridden, type BriqueSlot } from '../../lib/briqueSlots';
+import { effectiveValue, isSlotFilled, isSlotOverridden, variantCount, type BriqueSlot } from '../../lib/briqueSlots';
 
 interface SlotRowProps {
   slot: BriqueSlot;
@@ -16,6 +16,7 @@ interface SlotRowProps {
 function SlotRow({ slot, onClick }: SlotRowProps) {
   const filled = isSlotFilled(slot);
   const overridden = isSlotOverridden(slot);
+  const variants = variantCount(slot);
   const value = effectiveValue(slot);
   const preview = filled ? value : '(vide — clique pour remplir)';
 
@@ -25,7 +26,12 @@ function SlotRow({ slot, onClick }: SlotRowProps) {
         <div className="max-w-[280px] space-y-1">
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] uppercase tracking-wide font-semibold opacity-90">{slot.label}</span>
-            {overridden && (
+            {variants > 1 && (
+              <span className="text-[9px] uppercase font-semibold px-1 rounded-sm bg-current text-on-current">
+                {variants} variantes
+              </span>
+            )}
+            {variants === 1 && (
               <span className="text-[9px] uppercase font-semibold px-1 rounded-sm bg-current text-on-current">
                 local
               </span>
@@ -33,6 +39,11 @@ function SlotRow({ slot, onClick }: SlotRowProps) {
           </div>
           <div className="text-[11px] italic opacity-70">Clique pour éditer · {slot.hint}</div>
           <div className="text-[12px] leading-snug whitespace-pre-line break-words">{preview}</div>
+          {variants > 1 && (
+            <div className="text-[10px] opacity-60 italic pt-0.5 border-t border-current/20">
+              + {variants - 1} autre{variants > 2 ? 's' : ''} variante{variants > 2 ? 's' : ''} (visible{variants > 2 ? 's' : ''} dans le drawer)
+            </div>
+          )}
         </div>
       }
     >
@@ -53,11 +64,22 @@ function SlotRow({ slot, onClick }: SlotRowProps) {
       >
         <div
           className={cn(
-            'shrink-0 text-[9px] uppercase tracking-wide font-semibold leading-none mt-0.5 w-[42px]',
-            overridden ? 'text-current' : 'text-text-faint',
+            'shrink-0 flex flex-col items-start gap-0.5 mt-0.5 w-[44px]',
           )}
         >
-          {slot.label}
+          <div
+            className={cn(
+              'text-[9px] uppercase tracking-wide font-semibold leading-none',
+              overridden ? 'text-current' : 'text-text-faint',
+            )}
+          >
+            {slot.label}
+          </div>
+          {variants > 1 && (
+            <div className="text-[9px] font-bold tabular-nums px-1 rounded-sm bg-current text-on-current leading-tight">
+              ×{variants}
+            </div>
+          )}
         </div>
         <div
           className={cn(
